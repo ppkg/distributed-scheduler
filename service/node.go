@@ -18,16 +18,19 @@ type nodeService struct {
 func (s *nodeService) GetMaster(ctx context.Context, _ *empty.Empty) (*node.GetMasterResponse, error) {
 	nodeInfo := s.appCtx.GetMasterNode()
 	return &node.GetMasterResponse{
-		Url:    nodeInfo.Url,
-		NodeId: nodeInfo.NodeId,
+		NodeInfo: &node.NodeInfo{
+			Url:    nodeInfo.Url,
+			NodeId: nodeInfo.NodeId,
+		},
 	}, nil
 }
 
 // 心跳检测
-func (s *nodeService) HeartBeat(ctx context.Context, _ *empty.Empty) (*empty.Empty, error) {
+func (s *nodeService) HeartBeat(ctx context.Context, req *node.HeartBeatRequest) (*empty.Empty, error) {
 	if !s.appCtx.IsMasterNode() {
 		return nil, errCode.ToGrpcErr(errCode.ErrNonMasterNode)
 	}
+	s.appCtx.RegWorker(req.NodeInfo.NodeId, req.NodeInfo.Url)
 	return &emptypb.Empty{}, nil
 }
 

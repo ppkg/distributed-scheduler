@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	transport "github.com/Jille/raft-grpc-transport"
@@ -33,6 +34,8 @@ type ApplicationContext struct {
 	tm           *transport.Manager
 	grpcServer   *grpc.Server
 	namingClient namingClient.INamingClient
+	workerMap    sync.Map
+	heartbeatMap sync.Map
 }
 
 func NewApp(opts ...Option) *ApplicationContext {
@@ -43,6 +46,35 @@ func NewApp(opts ...Option) *ApplicationContext {
 	}
 	instance.initGrpc()
 	return instance
+}
+
+// 注册worker endpoint
+func (s *ApplicationContext) RegWorker(nodeId, url string) {
+	if _, ok := s.heartbeatMap.Load(nodeId); !ok {
+		s.workerMap.Store(nodeId, url)
+	}
+	s.heartbeatMap.Store(nodeId, time.Now())
+}
+
+// 定时检查心跳状态
+func (s *ApplicationContext) checkHeartbeatStatus() {
+	timer := time.Tick(3 * time.Second)
+	for now := range timer {
+		delNodeIds := make([]interface{}, 0)
+		s.heartbeatMap.Range(func(nodeId, heartBeatTime interface{}) bool {
+			if now.Sub(heartBeatTime.(time.Time)) < 3*time.Second {
+				return true
+			}
+			delNodeIds = append(delNodeIds, nodeId)
+			return true
+		})
+		for _, nodeId := range delNodeIds {
+			url, _ := s.workerMap.Load(nodeId)
+			s.workerMap.Delete(nodeId)
+			s.heartbeatMap.Delete(nodeId)
+			glog.Infof("ApplicationContext/checkHeartbeatStatus 心跳断开worker节点(%v,%v)被移除", nodeId, url)
+		}
+	}
 }
 
 // 初始化默认配置
@@ -114,6 +146,9 @@ func (s *ApplicationContext) Run() error {
 		glog.Errorf("Application/run 监听服务发现异常,err:%v", err)
 		return err
 	}
+
+	// worker心跳检测
+	go s.checkHeartbeatStatus()
 
 	// 初始化grpc服务
 	err = s.doServe()

@@ -10,12 +10,20 @@ service NodeService {
     // 获取主节点信息
     rpc GetMaster(google.protobuf.Empty) returns (GetMasterResponse);
     // 心跳检测
-    rpc HeartBeat(google.protobuf.Empty) returns (google.protobuf.Empty);
+    rpc HeartBeat(HeartBeatRequest) returns (google.protobuf.Empty);
 }
 
 message GetMasterResponse {
+    NodeInfo NodeInfo=1;
+}
+
+message NodeInfo {
     // 服务器地址
     string Url =1;
     // 节点ID
     string NodeId =2;
+}
+
+message HeartBeatRequest {
+    NodeInfo NodeInfo=1;
 }

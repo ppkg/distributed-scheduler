@@ -26,13 +26,10 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type GetMasterResponse struct {
-	// 服务器地址
-	Url string `protobuf:"bytes,1,opt,name=Url,proto3" json:"Url"`
-	// 节点ID
-	NodeId               string   `protobuf:"bytes,2,opt,name=NodeId,proto3" json:"NodeId"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	NodeInfo             *NodeInfo `protobuf:"bytes,1,opt,name=NodeInfo,proto3" json:"NodeInfo"`
+	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
+	XXX_unrecognized     []byte    `json:"-"`
+	XXX_sizecache        int32     `json:"-"`
 }
 
 func (m *GetMasterResponse) Reset()         { *m = GetMasterResponse{} }
@@ -60,40 +57,126 @@ func (m *GetMasterResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_GetMasterResponse proto.InternalMessageInfo
 
-func (m *GetMasterResponse) GetUrl() string {
+func (m *GetMasterResponse) GetNodeInfo() *NodeInfo {
+	if m != nil {
+		return m.NodeInfo
+	}
+	return nil
+}
+
+type NodeInfo struct {
+	// 服务器地址
+	Url string `protobuf:"bytes,1,opt,name=Url,proto3" json:"Url"`
+	// 节点ID
+	NodeId               string   `protobuf:"bytes,2,opt,name=NodeId,proto3" json:"NodeId"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *NodeInfo) Reset()         { *m = NodeInfo{} }
+func (m *NodeInfo) String() string { return proto.CompactTextString(m) }
+func (*NodeInfo) ProtoMessage()    {}
+func (*NodeInfo) Descriptor() ([]byte, []int) {
+	return fileDescriptor_2b558ce09c246314, []int{1}
+}
+
+func (m *NodeInfo) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_NodeInfo.Unmarshal(m, b)
+}
+func (m *NodeInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_NodeInfo.Marshal(b, m, deterministic)
+}
+func (m *NodeInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NodeInfo.Merge(m, src)
+}
+func (m *NodeInfo) XXX_Size() int {
+	return xxx_messageInfo_NodeInfo.Size(m)
+}
+func (m *NodeInfo) XXX_DiscardUnknown() {
+	xxx_messageInfo_NodeInfo.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_NodeInfo proto.InternalMessageInfo
+
+func (m *NodeInfo) GetUrl() string {
 	if m != nil {
 		return m.Url
 	}
 	return ""
 }
 
-func (m *GetMasterResponse) GetNodeId() string {
+func (m *NodeInfo) GetNodeId() string {
 	if m != nil {
 		return m.NodeId
 	}
 	return ""
 }
 
+type HeartBeatRequest struct {
+	NodeInfo             *NodeInfo `protobuf:"bytes,1,opt,name=NodeInfo,proto3" json:"NodeInfo"`
+	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
+	XXX_unrecognized     []byte    `json:"-"`
+	XXX_sizecache        int32     `json:"-"`
+}
+
+func (m *HeartBeatRequest) Reset()         { *m = HeartBeatRequest{} }
+func (m *HeartBeatRequest) String() string { return proto.CompactTextString(m) }
+func (*HeartBeatRequest) ProtoMessage()    {}
+func (*HeartBeatRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_2b558ce09c246314, []int{2}
+}
+
+func (m *HeartBeatRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_HeartBeatRequest.Unmarshal(m, b)
+}
+func (m *HeartBeatRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_HeartBeatRequest.Marshal(b, m, deterministic)
+}
+func (m *HeartBeatRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HeartBeatRequest.Merge(m, src)
+}
+func (m *HeartBeatRequest) XXX_Size() int {
+	return xxx_messageInfo_HeartBeatRequest.Size(m)
+}
+func (m *HeartBeatRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_HeartBeatRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_HeartBeatRequest proto.InternalMessageInfo
+
+func (m *HeartBeatRequest) GetNodeInfo() *NodeInfo {
+	if m != nil {
+		return m.NodeInfo
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterType((*GetMasterResponse)(nil), "node.GetMasterResponse")
+	proto.RegisterType((*NodeInfo)(nil), "node.NodeInfo")
+	proto.RegisterType((*HeartBeatRequest)(nil), "node.HeartBeatRequest")
 }
 
 func init() { proto.RegisterFile("proto/node/node.proto", fileDescriptor_2b558ce09c246314) }
 
 var fileDescriptor_2b558ce09c246314 = []byte{
-	// 179 bytes of a gzipped FileDescriptorProto
+	// 226 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x2d, 0x28, 0xca, 0x2f,
 	0xc9, 0xd7, 0xcf, 0xcb, 0x4f, 0x49, 0x05, 0x13, 0x7a, 0x60, 0xbe, 0x10, 0x0b, 0x88, 0x2d, 0x25,
 	0x9d, 0x9e, 0x9f, 0x9f, 0x9e, 0x93, 0xaa, 0x0f, 0x16, 0x4b, 0x2a, 0x4d, 0xd3, 0x4f, 0xcd, 0x2d,
-	0x28, 0xa9, 0x84, 0x28, 0x51, 0xb2, 0xe5, 0x12, 0x74, 0x4f, 0x2d, 0xf1, 0x4d, 0x2c, 0x2e, 0x49,
-	0x2d, 0x0a, 0x4a, 0x2d, 0x2e, 0xc8, 0xcf, 0x2b, 0x4e, 0x15, 0x12, 0xe0, 0x62, 0x0e, 0x2d, 0xca,
-	0x91, 0x60, 0x54, 0x60, 0xd4, 0xe0, 0x0c, 0x02, 0x31, 0x85, 0xc4, 0xb8, 0xd8, 0xfc, 0xf2, 0x53,
-	0x52, 0x3d, 0x53, 0x24, 0x98, 0xc0, 0x82, 0x50, 0x9e, 0x51, 0x07, 0x23, 0x17, 0x37, 0x88, 0x19,
-	0x9c, 0x5a, 0x54, 0x96, 0x99, 0x9c, 0x2a, 0x64, 0xc3, 0xc5, 0x09, 0x37, 0x4e, 0x48, 0x4c, 0x0f,
-	0x62, 0xb3, 0x1e, 0xcc, 0x66, 0x3d, 0x57, 0x90, 0xcd, 0x52, 0xe2, 0x7a, 0x60, 0x37, 0x62, 0xda,
-	0x6b, 0xcd, 0xc5, 0xe9, 0x91, 0x9a, 0x58, 0x54, 0xe2, 0x94, 0x9a, 0x58, 0x82, 0x53, 0x37, 0x0e,
-	0xf1, 0x24, 0x36, 0x30, 0xdf, 0x18, 0x10, 0x00, 0x00, 0xff, 0xff, 0xae, 0x10, 0x7c, 0x58, 0x0c,
-	0x01, 0x00, 0x00,
+	0x28, 0xa9, 0x84, 0x28, 0x51, 0xb2, 0xe7, 0x12, 0x74, 0x4f, 0x2d, 0xf1, 0x4d, 0x2c, 0x2e, 0x49,
+	0x2d, 0x0a, 0x4a, 0x2d, 0x2e, 0xc8, 0xcf, 0x2b, 0x4e, 0x15, 0xd2, 0xe2, 0xe2, 0xf0, 0xcb, 0x4f,
+	0x49, 0xf5, 0xcc, 0x4b, 0xcb, 0x97, 0x60, 0x54, 0x60, 0xd4, 0xe0, 0x36, 0xe2, 0xd3, 0x03, 0x1b,
+	0x0b, 0x13, 0x0d, 0x82, 0xcb, 0x2b, 0x99, 0x20, 0xd4, 0x0a, 0x09, 0x70, 0x31, 0x87, 0x16, 0xe5,
+	0x80, 0xb5, 0x70, 0x06, 0x81, 0x98, 0x42, 0x62, 0x5c, 0x6c, 0x60, 0xd9, 0x14, 0x09, 0x26, 0xb0,
+	0x20, 0x94, 0xa7, 0x64, 0xc7, 0x25, 0xe0, 0x91, 0x9a, 0x58, 0x54, 0xe2, 0x94, 0x9a, 0x58, 0x12,
+	0x94, 0x5a, 0x58, 0x9a, 0x5a, 0x5c, 0x42, 0x8a, 0xad, 0x46, 0x1d, 0x8c, 0x5c, 0xdc, 0x20, 0x4e,
+	0x70, 0x6a, 0x51, 0x59, 0x66, 0x72, 0xaa, 0x90, 0x0d, 0x17, 0x27, 0xdc, 0x1b, 0x42, 0x62, 0x7a,
+	0x10, 0x1f, 0xeb, 0xc1, 0x7c, 0xac, 0xe7, 0x0a, 0xf2, 0xb1, 0x94, 0x38, 0xc4, 0x38, 0x4c, 0xff,
+	0x5a, 0x73, 0x71, 0xc2, 0x5d, 0x23, 0x24, 0x06, 0x51, 0x85, 0xee, 0x3c, 0x29, 0x1c, 0xa6, 0x26,
+	0xb1, 0x81, 0xf9, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0x64, 0xa1, 0xc3, 0x08, 0x84, 0x01,
+	0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -111,7 +194,7 @@ type NodeServiceClient interface {
 	// 获取主节点信息
 	GetMaster(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*GetMasterResponse, error)
 	// 心跳检测
-	HeartBeat(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error)
+	HeartBeat(ctx context.Context, in *HeartBeatRequest, opts ...grpc.CallOption) (*empty.Empty, error)
 }
 
 type nodeServiceClient struct {
@@ -131,7 +214,7 @@ func (c *nodeServiceClient) GetMaster(ctx context.Context, in *empty.Empty, opts
 	return out, nil
 }
 
-func (c *nodeServiceClient) HeartBeat(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error) {
+func (c *nodeServiceClient) HeartBeat(ctx context.Context, in *HeartBeatRequest, opts ...grpc.CallOption) (*empty.Empty, error) {
 	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, "/node.NodeService/HeartBeat", in, out, opts...)
 	if err != nil {
@@ -145,7 +228,7 @@ type NodeServiceServer interface {
 	// 获取主节点信息
 	GetMaster(context.Context, *empty.Empty) (*GetMasterResponse, error)
 	// 心跳检测
-	HeartBeat(context.Context, *empty.Empty) (*empty.Empty, error)
+	HeartBeat(context.Context, *HeartBeatRequest) (*empty.Empty, error)
 }
 
 // UnimplementedNodeServiceServer can be embedded to have forward compatible implementations.
@@ -155,7 +238,7 @@ type UnimplementedNodeServiceServer struct {
 func (*UnimplementedNodeServiceServer) GetMaster(ctx context.Context, req *empty.Empty) (*GetMasterResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMaster not implemented")
 }
-func (*UnimplementedNodeServiceServer) HeartBeat(ctx context.Context, req *empty.Empty) (*empty.Empty, error) {
+func (*UnimplementedNodeServiceServer) HeartBeat(ctx context.Context, req *HeartBeatRequest) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method HeartBeat not implemented")
 }
 
@@ -182,7 +265,7 @@ func _NodeService_GetMaster_Handler(srv interface{}, ctx context.Context, dec fu
 }
 
 func _NodeService_HeartBeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(empty.Empty)
+	in := new(HeartBeatRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -194,7 +277,7 @@ func _NodeService_HeartBeat_Handler(srv interface{}, ctx context.Context, dec fu
 		FullMethod: "/node.NodeService/HeartBeat",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).HeartBeat(ctx, req.(*empty.Empty))
+		return srv.(NodeServiceServer).HeartBeat(ctx, req.(*HeartBeatRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
