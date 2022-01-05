@@ -2,6 +2,7 @@ package main
 
 import (
 	"distributed-scheduler/core"
+	"distributed-scheduler/proto/node"
 	"distributed-scheduler/service"
 	"flag"
 	"fmt"
@@ -23,7 +24,7 @@ func main() {
 	}
 
 	app := core.NewApp(core.WithAppNameOption("distributed-scheduler"), core.WithNacosAddrOption("mse-e52dbdd6-p.nacos-ans.mse.aliyuncs.com:8848"), core.WithNacosNamespaceOption("27fdefc2-ae39-41fd-bac4-9256acbf97bc"), core.WithNacosGroupNameOption("test"), core.WithPortOption(*port), core.WithNodeIdOption(*raftId)).RegisterGrpc(func(ctx *core.ApplicationContext, server *grpc.Server) {
-		service.NewNodeService(ctx)
+		node.RegisterNodeServiceServer(server, service.NewNodeService(ctx))
 	})
 
 	err := app.Run()

@@ -51,6 +51,7 @@ func NewApp(opts ...Option) *ApplicationContext {
 // 注册worker endpoint
 func (s *ApplicationContext) RegWorker(nodeId, url string) {
 	if _, ok := s.heartbeatMap.Load(nodeId); !ok {
+		glog.Infof("ApplicationContext/RegWorker 注册worker节点(%v,%v)成功", nodeId, url)
 		s.workerMap.Store(nodeId, url)
 	}
 	s.heartbeatMap.Store(nodeId, time.Now())
@@ -381,9 +382,8 @@ func (s *ApplicationContext) watchServiceDiscovery() error {
 						glog.Errorf("Application/watchServiceDiscovery 当前节点:%s，service信息:%+v，移除raft节点失败:%v", s.conf.Raft.NodeId, item, err)
 					}
 				}
-
-				glog.Infof("Application/watchServiceDiscovery 当前raft集群状态:%s", kit.JsonEncode(s.raft.GetConfiguration().Configuration().Servers))
 			}
+			glog.Infof("Application/watchServiceDiscovery 当前节点:%s,raft集群状态:%s", s.conf.Raft.NodeId, kit.JsonEncode(s.raft.GetConfiguration().Configuration().Servers))
 		},
 	})
 }
@@ -400,13 +400,13 @@ func (s *ApplicationContext) IsMasterNode() bool {
 
 // 获取主节点信息
 func (s *ApplicationContext) GetMasterNode() NodeInfo {
-	node := NodeInfo{
-		Url: string(s.raft.Leader()),
-	}
+	leaderServer := s.raft.Leader()
+	node := NodeInfo{}
 	serverList := s.raft.GetConfiguration().Configuration().Servers
 	for _, item := range serverList {
-		if node.Url == string(item.Address) {
+		if strings.HasSuffix(string(item.Address), string(leaderServer)) {
 			node.NodeId = string(item.ID)
+			node.Url = string(item.Address)
 			break
 		}
 	}
