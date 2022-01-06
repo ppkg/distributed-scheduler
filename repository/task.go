@@ -1,0 +1,14 @@
+package repository
+
+import (
+	"distributed-scheduler/model"
+
+	"gorm.io/gorm"
+)
+
+type TaskRepository interface {
+	// 批量保存task信息
+	BatchSave(db *gorm.DB, list []*model.Task) error
+	// 查询task列表
+	List(db *gorm.DB, params map[string]interface{}) ([]*model.Task, error)
+}

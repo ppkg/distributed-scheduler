@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
+	"gorm.io/gorm"
 )
 
 type ApplicationContext struct {
@@ -36,6 +37,7 @@ type ApplicationContext struct {
 	namingClient namingClient.INamingClient
 	workerMap    sync.Map
 	heartbeatMap sync.Map
+	Db           *gorm.DB
 }
 
 func NewApp(opts ...Option) *ApplicationContext {
@@ -131,6 +133,13 @@ func (s *ApplicationContext) Run() error {
 	err := s.initNacos()
 	if err != nil {
 		glog.Errorf("Application/run 注册服务异常,err:%v", err)
+		return err
+	}
+
+	// 初始化数据库引擎
+	err = s.initDatabase()
+	if err != nil {
+		glog.Errorf("Application/run 初始化数据库引擎异常,err:%v", err)
 		return err
 	}
 
