@@ -42,7 +42,31 @@ func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 		return err
 	}
 
+	// 重新加载最新job信息
+	jobInfo, err = s.reloadJobInfo(jobInfo.Job.Id)
+	if err != nil {
+		glog.Errorf("jobService/SyncSubmit 重新加载最新job信息异常,err:%+v", err)
+		return err
+	}
+
 	return stream.SendAndClose(&job.SyncSubmitResponse{})
+}
+
+// 重新加载job信息
+func (s *jobService) reloadJobInfo(id int64) (dto.JobInfo, error) {
+	var jobInfo dto.JobInfo
+	var err error
+	jobInfo.Job, err = s.jobRepo.FindById(s.appCtx.Db, id)
+	if err != nil {
+		return jobInfo, err
+	}
+	if jobInfo.Job == nil {
+		return jobInfo, errCode.ToGrpcErr(errCode.ErrJobNotFound)
+	}
+	jobInfo.TaskList, err = s.taskRepo.List(s.appCtx.Db, map[string]interface{}{
+		"jobId": id,
+	})
+	return jobInfo, err
 }
 
 // 持久化job信息
