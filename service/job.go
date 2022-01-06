@@ -34,6 +34,7 @@ func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 		glog.Errorf("jobService/SyncSubmit 接收job数据异常,err:%+v", err)
 		return err
 	}
+	jobInfo.Job.IsAsync = 1
 
 	err = s.persistence(jobInfo)
 	if err != nil {
@@ -61,6 +62,7 @@ func (s *jobService) persistence(jobInfo dto.JobInfo) error {
 // 接收job信息
 func (s *jobService) receiveJobStream(stream job.JobService_SyncSubmitServer) (dto.JobInfo, error) {
 	var jobInfo dto.JobInfo
+	var firstPipeline string
 	pos := 1
 	for {
 		r, err := stream.Recv()
@@ -80,10 +82,12 @@ func (s *jobService) receiveJobStream(stream job.JobService_SyncSubmitServer) (d
 				Type:        r.Type,
 				PipelineSet: strings.Join(r.PipelineSet, ","),
 			}
+			firstPipeline = r.PipelineSet[0]
 		}
 		jobInfo.TaskList = append(jobInfo.TaskList, &model.Task{
-			Name:  fmt.Sprintf("%s-%d", jobInfo.Job.Name, pos),
-			Input: r.Data,
+			Name:     fmt.Sprintf("%s-%d", jobInfo.Job.Name, pos),
+			Input:    r.Data,
+			Pipeline: firstPipeline,
 		})
 		pos++
 	}

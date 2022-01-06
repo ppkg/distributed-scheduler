@@ -15,6 +15,8 @@ type Job struct {
 	Status int32
 	// 管道集合，多个以","分隔
 	PipelineSet string
+	// 是否为异步job，0：否，1：是
+	IsAsync int32
 	// task数量
 	Size int32
 	// job运行结果
