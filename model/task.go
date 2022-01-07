@@ -20,8 +20,8 @@ type Task struct {
 	Output string
 	// 分配执行节点ID
 	NodeId string
-	// 分配执行节点ip
-	NodeIp string
+	// 分配执行节点端点
+	Endpoint string
 	// 创建时间
 	CreateTime time.Time `gorm:"->"`
 	// 完成时间

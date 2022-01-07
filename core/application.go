@@ -415,7 +415,7 @@ func (s *ApplicationContext) GetMasterNode() NodeInfo {
 	for _, item := range serverList {
 		if strings.HasSuffix(string(item.Address), string(leaderServer)) {
 			node.NodeId = string(item.ID)
-			node.Url = string(item.Address)
+			node.Endpoint = string(item.Address)
 			break
 		}
 	}

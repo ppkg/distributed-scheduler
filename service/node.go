@@ -19,8 +19,8 @@ func (s *nodeService) GetMaster(ctx context.Context, _ *empty.Empty) (*node.GetM
 	nodeInfo := s.appCtx.GetMasterNode()
 	return &node.GetMasterResponse{
 		NodeInfo: &node.NodeInfo{
-			Url:    nodeInfo.Url,
-			NodeId: nodeInfo.NodeId,
+			Endpoint: nodeInfo.Endpoint,
+			NodeId:   nodeInfo.NodeId,
 		},
 	}, nil
 }
@@ -30,7 +30,7 @@ func (s *nodeService) HeartBeat(ctx context.Context, req *node.HeartBeatRequest)
 	if !s.appCtx.IsMasterNode() {
 		return nil, errCode.ToGrpcErr(errCode.ErrNonMasterNode)
 	}
-	s.appCtx.RegWorker(req.NodeInfo.NodeId, req.NodeInfo.Url)
+	s.appCtx.RegWorker(req.NodeInfo.NodeId, req.NodeInfo.Endpoint)
 	return &emptypb.Empty{}, nil
 }
 

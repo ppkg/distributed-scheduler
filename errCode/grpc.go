@@ -13,10 +13,10 @@ func regErrCode(errMap map[int]string) {
 	}
 }
 
-func ToGrpcErr(code int) error {
+func ToGrpcErr(code int, args ...interface{}) error {
 	msg := "unknow"
 	if v, ok := ErrCodeDict[code]; ok {
 		msg = v
 	}
-	return status.Errorf(codes.Code(code), msg)
+	return status.Errorf(codes.Code(code), msg, args...)
 }

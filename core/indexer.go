@@ -8,21 +8,21 @@ import (
 // worker缓存组件
 type WorkerIndexer struct {
 	lock      sync.RWMutex
-	pipelines map[string]workerSet
-	workers   workerSet
+	pipelines map[string]nodeIdSet
+	workers   workerMap
 }
 
 func (s *WorkerIndexer) AddWorker(worker WorkerNode) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.workers[worker] = struct{}{}
+	s.workers[worker.NodeId] = worker
 
 	for _, pipeline := range strings.Split(worker.PipelineSet, ",") {
 		val, ok := s.pipelines[pipeline]
 		if !ok {
-			val = make(workerSet)
+			val = make(nodeIdSet)
 		}
-		val[worker] = struct{}{}
+		val[worker.NodeId] = struct{}{}
 		s.pipelines[pipeline] = val
 	}
 }
@@ -30,44 +30,53 @@ func (s *WorkerIndexer) AddWorker(worker WorkerNode) {
 func (s *WorkerIndexer) RemoveWorker(worker WorkerNode) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if _, ok := s.workers[worker]; !ok {
+	if _, ok := s.workers[worker.NodeId]; !ok {
 		return
 	}
-	delete(s.workers, worker)
+	delete(s.workers, worker.NodeId)
 	for _, pipeline := range strings.Split(worker.PipelineSet, ",") {
 		if val, ok := s.pipelines[pipeline]; ok {
-			delete(val, worker)
+			delete(val, worker.NodeId)
 		}
 	}
 }
 
-func (s *WorkerIndexer) GetPipelineWorker(key string) []WorkerNode {
-	s.lock.RLocker().Lock()
-	defer s.lock.RLocker().Unlock()
-	workerSet, ok := s.pipelines[key]
+func (s *WorkerIndexer) GetPipelineWorker(pipelineKey string) []WorkerNode {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	nodeIds, ok := s.pipelines[pipelineKey]
 	if !ok {
 		return nil
 	}
-	list := make([]WorkerNode, 0, len(workerSet))
-	for worker := range workerSet {
-		list = append(list, worker)
+	list := make([]WorkerNode, 0, len(nodeIds))
+	for nodeId := range nodeIds {
+		list = append(list, s.workers[nodeId])
 	}
 	return list
+}
+
+func (s *WorkerIndexer) GetWorker(nodeId string) (WorkerNode, bool) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	node, ok := s.workers[nodeId]
+	return node, ok
 }
 
 // 工作节点
 type WorkerNode struct {
 	NodeId string
-	Url    string
+	Endpoint    string
 	// 支持管道集合,多个以","隔开
 	PipelineSet string
 }
 
-type workerSet map[WorkerNode]struct{}
+type workerMap map[string]WorkerNode
+
+type nodeIdSet map[string]struct{}
 
 func NewWorkerIndexer() *WorkerIndexer {
 	return &WorkerIndexer{
-		pipelines: make(map[string]workerSet),
-		workers:   make(workerSet),
+		pipelines: make(map[string]nodeIdSet),
+		workers:   make(workerMap),
 	}
 }

@@ -19,7 +19,7 @@ message GetMasterResponse {
 
 message NodeInfo {
     // 服务器地址
-    string Url =1;
+    string Endpoint =1;
     // 节点ID
     string NodeId =2;
 }
