@@ -13,8 +13,8 @@ message SubmitRequest {
   int64 JobId = 2;
   // task名称
   string Name = 3;
-  // 任务处理管道
-  string Pipeline = 4;
+  // 任务处理插件
+  string Plugin = 4;
   // task输入数据
   string Data = 5;
 }

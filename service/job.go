@@ -86,7 +86,7 @@ func (s *jobService) persistence(jobInfo dto.JobInfo) error {
 // 接收job信息
 func (s *jobService) receiveJobStream(stream job.JobService_SyncSubmitServer) (dto.JobInfo, error) {
 	var jobInfo dto.JobInfo
-	var firstPipeline string
+	var firstPlugin string
 	pos := 1
 	for {
 		r, err := stream.Recv()
@@ -96,22 +96,22 @@ func (s *jobService) receiveJobStream(stream job.JobService_SyncSubmitServer) (d
 		if err != nil {
 			return jobInfo, err
 		}
-		if len(r.PipelineSet) == 0 {
-			return jobInfo, errCode.ToGrpcErr(errCode.ErrPipelineSetEmpty)
+		if len(r.PluginSet) == 0 {
+			return jobInfo, errCode.ToGrpcErr(errCode.ErrPluginSetEmpty)
 		}
 		// 初始化job数据
 		if jobInfo.Job == nil {
 			jobInfo.Job = &model.Job{
-				Name:        r.Name,
-				Type:        r.Type,
-				PipelineSet: strings.Join(r.PipelineSet, ","),
+				Name:      r.Name,
+				Type:      r.Type,
+				PluginSet: strings.Join(r.PluginSet, ","),
 			}
-			firstPipeline = r.PipelineSet[0]
+			firstPlugin = r.PluginSet[0]
 		}
 		jobInfo.TaskList = append(jobInfo.TaskList, &model.Task{
-			Name:     fmt.Sprintf("%s-%d", jobInfo.Job.Name, pos),
-			Input:    r.Data,
-			Pipeline: firstPipeline,
+			Name:   fmt.Sprintf("%s-%d", jobInfo.Job.Name, pos),
+			Input:  r.Data,
+			Plugin: firstPlugin,
 		})
 		pos++
 	}

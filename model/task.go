@@ -10,8 +10,8 @@ type Task struct {
 	JobId int64
 	// task名称
 	Name string
-	// 当前任务处理管道
-	Pipeline string
+	// 当前任务处理插件
+	Plugin string
 	// task状态,0:待执行，1：执行中，2：执行完成，3：异常退出
 	Status int32
 	// 输入参数

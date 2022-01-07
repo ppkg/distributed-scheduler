@@ -7,12 +7,14 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	transport "github.com/Jille/raft-grpc-transport"
+	"github.com/google/go-cmp/cmp"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	boltdb "github.com/hashicorp/raft-boltdb"
@@ -30,14 +32,14 @@ import (
 )
 
 type ApplicationContext struct {
-	conf         Config
-	raft         *raft.Raft
-	tm           *transport.Manager
-	grpcServer   *grpc.Server
-	namingClient namingClient.INamingClient
-	workerMap    sync.Map
-	heartbeatMap sync.Map
-	Db           *gorm.DB
+	conf            Config
+	raft            *raft.Raft
+	tm              *transport.Manager
+	grpcServer      *grpc.Server
+	namingClient    namingClient.INamingClient
+	heartbeatKeeper heartbeatMap
+	Db              *gorm.DB
+	scheduler       *ScheduleEngine
 }
 
 func NewApp(opts ...Option) *ApplicationContext {
@@ -50,34 +52,41 @@ func NewApp(opts ...Option) *ApplicationContext {
 	return instance
 }
 
-// 注册worker endpoint
-func (s *ApplicationContext) RegWorker(nodeId, url string) {
-	if _, ok := s.heartbeatMap.Load(nodeId); !ok {
-		glog.Infof("ApplicationContext/RegWorker 注册worker节点(%v,%v)成功", nodeId, url)
-		s.workerMap.Store(nodeId, url)
-	}
-	s.heartbeatMap.Store(nodeId, time.Now())
-}
-
 // 定时检查心跳状态
-func (s *ApplicationContext) checkHeartbeatStatus() {
+func (s *ApplicationContext) cronCheckHeartbeatStatus() {
 	timer := time.Tick(3 * time.Second)
 	for now := range timer {
-		delNodeIds := make([]interface{}, 0)
-		s.heartbeatMap.Range(func(nodeId, heartBeatTime interface{}) bool {
-			if now.Sub(heartBeatTime.(time.Time)) < 3*time.Second {
-				return true
+		for _, item := range s.heartbeatKeeper.All() {
+			if now.Sub(item.AccessTime) < 3*time.Second {
+				continue
 			}
-			delNodeIds = append(delNodeIds, nodeId)
-			return true
-		})
-		for _, nodeId := range delNodeIds {
-			url, _ := s.workerMap.Load(nodeId)
-			s.workerMap.Delete(nodeId)
-			s.heartbeatMap.Delete(nodeId)
-			glog.Infof("ApplicationContext/checkHeartbeatStatus 心跳断开worker节点(%v,%v)被移除", nodeId, url)
+			s.scheduler.WorkerIndexer.RemoveWorker(item.WorkerNode)
+			glog.Infof("ApplicationContext/checkHeartbeatStatus 心跳断开worker节点(%v,%v)被移除", item.NodeId, item.Endpoint)
 		}
 	}
+}
+
+// 更新心跳数据
+func (s *ApplicationContext) UpdateHeartbeat(worker WorkerNode) {
+	oldWorker, ok := s.heartbeatKeeper.Get(worker.NodeId)
+	if !ok {
+		s.scheduler.WorkerIndexer.AddWorker(worker)
+		s.heartbeatKeeper.Put(worker)
+		glog.Infof("ApplicationContext/checkHeartbeatStatus 新增worker节点(%s,%s),支持插件:%v", worker.NodeId, worker.Endpoint, worker.PluginSet)
+		return
+	}
+	trans := cmp.Transformer("Sort", func(in []string) []string {
+		out := append([]string(nil), in...)
+		sort.Strings(out)
+		return out
+	})
+	// 如果worker节点支持插件集有变动时需要更新索引
+	if !cmp.Equal(worker.PluginSet, oldWorker.PluginSet, trans) {
+		s.scheduler.WorkerIndexer.RemoveWorker(oldWorker.WorkerNode)
+		s.scheduler.WorkerIndexer.AddWorker(worker)
+	}
+
+	oldWorker.AccessTime = time.Now()
 }
 
 // 初始化默认配置
@@ -93,6 +102,14 @@ func (s *ApplicationContext) initDefaultConfig() {
 	}
 	if s.conf.Port == 0 {
 		s.conf.Port = 8080
+	}
+
+	threadCount := os.Getenv("SCHEDULER_THREAD_COUNT")
+	if threadCount != "" {
+		s.conf.SchedulerThreadCount, _ = strconv.Atoi(threadCount)
+	}
+	if s.conf.SchedulerThreadCount == 0 {
+		s.conf.SchedulerThreadCount = 10
 	}
 
 	s.conf.Raft.NodeId = os.Getenv("NODE_ID")
@@ -128,6 +145,8 @@ func (s *ApplicationContext) appendNacosAddrConfig(addr string) {
 
 func (s *ApplicationContext) Run() error {
 	ctx := context.Background()
+	// 初始化调度器引擎
+	s.scheduler = NewScheduler(s.conf.SchedulerThreadCount)
 
 	// 注册服务(服务发现)
 	err := s.initNacos()
@@ -157,8 +176,8 @@ func (s *ApplicationContext) Run() error {
 		return err
 	}
 
-	// worker心跳检测
-	go s.checkHeartbeatStatus()
+	// 定时检查worker心跳状态
+	go s.cronCheckHeartbeatStatus()
 
 	// 初始化grpc服务
 	err = s.doServe()
@@ -435,6 +454,8 @@ type Config struct {
 	Raft RaftConfig
 	// nacos配置
 	Nacos NacosConfig
+	// 调度器线程数
+	SchedulerThreadCount int
 }
 
 type RaftConfig struct {
@@ -464,6 +485,12 @@ func WithAppNameOption(name string) Option {
 func WithPortOption(port int) Option {
 	return func(conf *Config) {
 		conf.Port = port
+	}
+}
+
+func WithSchedulerThreadOption(num int) Option {
+	return func(conf *Config) {
+		conf.SchedulerThreadCount = num
 	}
 }
 
@@ -522,4 +549,41 @@ func parseNacosAddr(addr string) (string, int) {
 		}
 	}
 	return pathInfo[0], port
+}
+
+type heartbeatMap struct {
+	data map[string]*heartbeat
+	lock sync.RWMutex
+}
+
+func (s *heartbeatMap) Put(worker WorkerNode) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.data[worker.NodeId] = &heartbeat{
+		WorkerNode: worker,
+		AccessTime: time.Now(),
+	}
+}
+
+func (s *heartbeatMap) Get(nodeId string) (*heartbeat, bool) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	val, ok := s.data[nodeId]
+	return val, ok
+}
+
+func (s *heartbeatMap) All() []*heartbeat {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	list := make([]*heartbeat, 0, len(s.data))
+	for _, v := range s.data {
+		list = append(list, v)
+	}
+	return list
+}
+
+// 心跳包
+type heartbeat struct {
+	WorkerNode
+	AccessTime time.Time
 }

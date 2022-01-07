@@ -13,8 +13,8 @@ type Job struct {
 	Type string
 	// job状态,0:待执行，1：执行中，2：执行完成，3：异常退出，4：已取消执行，5：推送失败
 	Status int32
-	// 管道集合，多个以","分隔
-	PipelineSet string
+	// 插件集合，多个以","分隔
+	PluginSet string
 	// 是否为异步job，0：否，1：是
 	IsAsync int32
 	// task数量

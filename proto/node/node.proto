@@ -2,28 +2,27 @@ syntax = "proto3";
 
 package node;
 
-
 import "google/protobuf/empty.proto";
 
 //------------------节点信息模块------------------------------------------
 service NodeService {
-    // 获取主节点信息
-    rpc GetMaster(google.protobuf.Empty) returns (GetMasterResponse);
-    // 心跳检测
-    rpc HeartBeat(HeartBeatRequest) returns (google.protobuf.Empty);
+  // 获取主节点信息
+  rpc GetMaster(google.protobuf.Empty) returns (GetMasterResponse);
+  // 心跳检测
+  rpc HeartBeat(HeartBeatRequest) returns (google.protobuf.Empty);
 }
 
-message GetMasterResponse {
-    NodeInfo NodeInfo=1;
-}
+message GetMasterResponse { NodeInfo NodeInfo = 1; }
 
 message NodeInfo {
-    // 服务器地址
-    string Endpoint =1;
-    // 节点ID
-    string NodeId =2;
+  // 服务器地址
+  string Endpoint = 1;
+  // 节点ID
+  string NodeId = 2;
 }
 
 message HeartBeatRequest {
-    NodeInfo NodeInfo=1;
+  NodeInfo NodeInfo = 1;
+  // worker节点所有支持的插件
+  repeated string PluginSet = 2;
 }

@@ -1,15 +1,14 @@
 package core
 
 import (
-	"strings"
 	"sync"
 )
 
 // worker缓存组件
 type WorkerIndexer struct {
-	lock      sync.RWMutex
-	pipelines map[string]nodeIdSet
-	workers   workerMap
+	lock    sync.RWMutex
+	plugins map[string]nodeIdSet
+	workers workerMap
 }
 
 func (s *WorkerIndexer) AddWorker(worker WorkerNode) {
@@ -17,13 +16,13 @@ func (s *WorkerIndexer) AddWorker(worker WorkerNode) {
 	defer s.lock.Unlock()
 	s.workers[worker.NodeId] = worker
 
-	for _, pipeline := range strings.Split(worker.PipelineSet, ",") {
-		val, ok := s.pipelines[pipeline]
+	for _, plugin := range worker.PluginSet {
+		val, ok := s.plugins[plugin]
 		if !ok {
 			val = make(nodeIdSet)
 		}
 		val[worker.NodeId] = struct{}{}
-		s.pipelines[pipeline] = val
+		s.plugins[plugin] = val
 	}
 }
 
@@ -34,17 +33,17 @@ func (s *WorkerIndexer) RemoveWorker(worker WorkerNode) {
 		return
 	}
 	delete(s.workers, worker.NodeId)
-	for _, pipeline := range strings.Split(worker.PipelineSet, ",") {
-		if val, ok := s.pipelines[pipeline]; ok {
+	for _, plugin := range worker.PluginSet {
+		if val, ok := s.plugins[plugin]; ok {
 			delete(val, worker.NodeId)
 		}
 	}
 }
 
-func (s *WorkerIndexer) GetPipelineWorker(pipelineKey string) []WorkerNode {
+func (s *WorkerIndexer) GetPluginWorker(pluginKey string) []WorkerNode {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-	nodeIds, ok := s.pipelines[pipelineKey]
+	nodeIds, ok := s.plugins[pluginKey]
 	if !ok {
 		return nil
 	}
@@ -64,10 +63,10 @@ func (s *WorkerIndexer) GetWorker(nodeId string) (WorkerNode, bool) {
 
 // 工作节点
 type WorkerNode struct {
-	NodeId string
-	Endpoint    string
-	// 支持管道集合,多个以","隔开
-	PipelineSet string
+	NodeId   string
+	Endpoint string
+	// 工作节点支持插件集合,多个以","隔开
+	PluginSet []string
 }
 
 type workerMap map[string]WorkerNode
@@ -76,7 +75,7 @@ type nodeIdSet map[string]struct{}
 
 func NewWorkerIndexer() *WorkerIndexer {
 	return &WorkerIndexer{
-		pipelines: make(map[string]nodeIdSet),
-		workers:   make(workerMap),
+		plugins: make(map[string]nodeIdSet),
+		workers: make(workerMap),
 	}
 }

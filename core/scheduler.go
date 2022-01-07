@@ -65,7 +65,7 @@ func (s *ScheduleEngine) runScheduleThead() {
 
 // 推送任务
 func (s *ScheduleEngine) processTask(task *model.Task) error {
-	workers, err := s.predicateWorker(task.Pipeline)
+	workers, err := s.predicateWorker(task.Plugin)
 	if err != nil {
 		glog.Errorf("ScheduleEngine/processTask 预选worker节点异常,taskId:%d,err:%+v", task.Id, err)
 		return err
@@ -73,7 +73,7 @@ func (s *ScheduleEngine) processTask(task *model.Task) error {
 
 	// 推送任务,如果推送失败则重推
 	for i := 0; i < 3; i++ {
-		myWorker := s.preferWorker(task.Pipeline, workers)
+		myWorker := s.preferWorker(task.Plugin, workers)
 		err = s.pushTask(myWorker, task)
 		if err == nil {
 			return nil
@@ -97,11 +97,11 @@ func (s *ScheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
 
 	client := task.NewTaskServiceClient(conn)
 	resp, err := client.SyncSubmit(context.Background(), &task.SubmitRequest{
-		Id:       t.Id,
-		JobId:    t.JobId,
-		Name:     t.Name,
-		Pipeline: t.Pipeline,
-		Data:     t.Input,
+		Id:     t.Id,
+		JobId:  t.JobId,
+		Name:   t.Name,
+		Plugin: t.Plugin,
+		Data:   t.Input,
 	})
 
 	if err != nil {
@@ -119,17 +119,17 @@ func (s *ScheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
 }
 
 // 优选worker工作节点
-func (s *ScheduleEngine) preferWorker(pipeline string, list []WorkerNode) WorkerNode {
-	pos := s.getAndIncr(pipeline)
+func (s *ScheduleEngine) preferWorker(plugin string, list []WorkerNode) WorkerNode {
+	pos := s.getAndIncr(plugin)
 	i := pos % uint32(len(list))
 	return list[i]
 }
 
 // 预选worker工作节点
-func (s *ScheduleEngine) predicateWorker(pipeline string) ([]WorkerNode, error) {
-	workers := s.WorkerIndexer.GetPipelineWorker(pipeline)
+func (s *ScheduleEngine) predicateWorker(plugin string) ([]WorkerNode, error) {
+	workers := s.WorkerIndexer.GetPluginWorker(plugin)
 	if len(workers) == 0 {
-		return nil, errCode.ToGrpcErr(errCode.ErrPipelineUnsupport, pipeline)
+		return nil, errCode.ToGrpcErr(errCode.ErrPluginUnsupport, plugin)
 	}
 	return workers, nil
 }

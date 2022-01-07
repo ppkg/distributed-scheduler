@@ -5,6 +5,7 @@ go 1.16
 require (
 	github.com/Jille/raft-grpc-transport v1.2.0
 	github.com/golang/protobuf v1.5.2
+	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/hashicorp/go-hclog v0.16.2
 	github.com/hashicorp/raft v1.3.2
 	github.com/hashicorp/raft-boltdb v0.0.0-20211202195631-7d34b9fb3f42

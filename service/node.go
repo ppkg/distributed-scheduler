@@ -30,7 +30,12 @@ func (s *nodeService) HeartBeat(ctx context.Context, req *node.HeartBeatRequest)
 	if !s.appCtx.IsMasterNode() {
 		return nil, errCode.ToGrpcErr(errCode.ErrNonMasterNode)
 	}
-	s.appCtx.RegWorker(req.NodeInfo.NodeId, req.NodeInfo.Endpoint)
+
+	s.appCtx.UpdateHeartbeat(core.WorkerNode{
+		NodeId:    req.NodeInfo.NodeId,
+		Endpoint:  req.NodeInfo.Endpoint,
+		PluginSet: req.PluginSet,
+	}})
 	return &emptypb.Empty{}, nil
 }
 

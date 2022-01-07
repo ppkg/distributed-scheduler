@@ -15,8 +15,8 @@ message SubmitRequest {
   string Name = 1;
   // job类型
   string Type = 2;
-  // 管道集合
-  repeated string PipelineSet = 3;
+  // 插件集合
+  repeated string PluginSet = 3;
   // job数据
   string Data = 4;
 }
