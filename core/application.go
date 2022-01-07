@@ -43,7 +43,11 @@ type ApplicationContext struct {
 }
 
 func NewApp(opts ...Option) *ApplicationContext {
-	instance := &ApplicationContext{}
+	instance := &ApplicationContext{
+		heartbeatKeeper: heartbeatMap{
+			data: make(map[string]*heartbeat),
+		},
+	}
 	instance.initDefaultConfig()
 	for _, m := range opts {
 		m(&instance.conf)
@@ -61,6 +65,7 @@ func (s *ApplicationContext) cronCheckHeartbeatStatus() {
 				continue
 			}
 			s.scheduler.WorkerIndexer.RemoveWorker(item.WorkerNode)
+			s.heartbeatKeeper.Remove(item.NodeId)
 			glog.Infof("ApplicationContext/checkHeartbeatStatus 心跳断开worker节点(%v,%v)被移除", item.NodeId, item.Endpoint)
 		}
 	}
@@ -570,6 +575,12 @@ func (s *heartbeatMap) Get(nodeId string) (*heartbeat, bool) {
 	defer s.lock.RUnlock()
 	val, ok := s.data[nodeId]
 	return val, ok
+}
+
+func (s *heartbeatMap) Remove(nodeId string) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	delete(s.data, nodeId)
 }
 
 func (s *heartbeatMap) All() []*heartbeat {
