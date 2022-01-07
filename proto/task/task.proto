@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package task;
+
+//------------------Task模块------------------------------------------
+service TaskService {
+  // 同步提交task
+  rpc SyncSubmit(SubmitRequest) returns (SyncSubmitResponse);
+}
+
+message SubmitRequest {
+  int64 Id = 1;
+  int64 JobId = 2;
+  // task名称
+  string Name = 3;
+  // 任务处理管道
+  string Pipeline = 4;
+  // task输入数据
+  string Data = 5;
+}
+
+message SyncSubmitResponse {
+  int64 Id = 1;
+  int64 JobId = 2;
+  // task状态,1：执行中，2：执行完成，3：异常退出
+  int32 status = 3;
+  // 处理结果
+  string Result = 4;
+}
