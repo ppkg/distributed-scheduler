@@ -35,7 +35,7 @@ func (s *nodeService) HeartBeat(ctx context.Context, req *node.HeartBeatRequest)
 		NodeId:    req.NodeInfo.NodeId,
 		Endpoint:  req.NodeInfo.Endpoint,
 		PluginSet: req.PluginSet,
-	}})
+	})
 	return &emptypb.Empty{}, nil
 }
 
