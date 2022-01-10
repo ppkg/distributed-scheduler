@@ -26,3 +26,7 @@ type Job struct {
 	// 完成时间
 	FinishTime sql.NullTime
 }
+
+func (s Job) TableName() string {
+	return "job"
+}

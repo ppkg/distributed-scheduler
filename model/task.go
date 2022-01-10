@@ -27,3 +27,7 @@ type Task struct {
 	// 完成时间
 	FinishTime sql.NullTime
 }
+
+func (s Task) TableName() string {
+	return "task"
+}
