@@ -57,13 +57,13 @@ func (s *ScheduleEngine) processTask(task *model.Task) error {
 	}
 
 	// 推送任务,如果推送失败则重推
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 5; i++ {
 		myWorker := s.preferWorker(task.Plugin, workers)
 		err = s.pushTask(myWorker, task)
 		if err == nil {
 			return nil
 		}
-		glog.Errorf("ScheduleEngine/processTask 推送任务异常,worker:%s,taskId:%d,err:%+v", kit.JsonEncode(myWorker), task.Id, err)
+		glog.Errorf("ScheduleEngine/processTask 第%d次推送任务异常,worker:%s,taskId:%d,err:%+v", i+1, kit.JsonEncode(myWorker), task.Id, err)
 	}
 
 	return err
