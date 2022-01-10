@@ -9,3 +9,10 @@ const (
 	CancelJobStatus    int32 = 4
 	PushFailJobStatus  int32 = 5
 )
+
+const (
+	// 异常退出
+	ExceptionCancel int32 = 1
+	// 手动取消
+	ManualCancel int32 = 2
+)

@@ -13,4 +13,6 @@ type JobRepository interface {
 	FindById(db *gorm.DB, id int64) (*model.Job, error)
 	// 查询job列表
 	List(db *gorm.DB, params map[string]interface{}) ([]*model.Job, error)
+	// 更新job状态
+	UpdateStatus(db *gorm.DB, model *model.Job) error
 }

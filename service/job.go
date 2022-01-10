@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"distributed-scheduler/core"
 	"distributed-scheduler/dto"
 	"distributed-scheduler/enum"
@@ -14,6 +15,7 @@ import (
 	"io"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/ppkg/glog"
 	"gorm.io/gorm"
@@ -64,9 +66,9 @@ func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 		}
 	}()
 
-	s.appCtx.Scheduler.Put(jobInfo,s.buildTasks(ctx, jobInfo)...)
+	s.appCtx.Scheduler.Put(jobInfo, s.buildTasks(ctx, jobInfo)...)
 
-	for _ = range jobInfo.Done {
+	for range jobInfo.Done {
 		endTasks := jobInfo.FilterFinishEndTask()
 		glog.Infof("当前job状态:%d,%s,共%个task,已完成%个", jobInfo.Job.Id, jobInfo.Job.Name, jobInfo.Job.Size, len(endTasks))
 		if jobInfo.Job.Size == int32(len(endTasks)) {
@@ -74,14 +76,34 @@ func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 		}
 	}
 
-	if cancelParam.IsCancel==1 {
+	switch cancelParam.IsCancel {
+	case enum.ExceptionCancel:
 		jobInfo.Job.Status = enum.ExceptionJobStatus
-		jobInfo.Job.Result=cancelParam.Reason
+		jobInfo.Job.Result = cancelParam.Reason
+	default:
+		jobInfo.Job.Status = enum.FinishJobStatus
+		result, err := jobInfo.Reduce()
+		if err != nil {
+			glog.Errorf("jobService/SyncSubmit 合并数据异常,%v", err)
+			return err
+		}
+		jobInfo.Job.Result = result
+		jobInfo.Job.FinishTime = sql.NullTime{
+			Time: time.Now(),
+		}
 	}
 	// 保存job状态
-	
+	err = s.jobRepo.UpdateStatus(s.appCtx.Db, jobInfo.Job)
+	if err != nil {
+		glog.Errorf("jobService/SyncSubmit 更新job状态异常,id:%d,err:%+v", jobInfo.Job.Id, err)
+		return err
+	}
 
-	return stream.SendAndClose(&job.SyncSubmitResponse{})
+	return stream.SendAndClose(&job.SyncSubmitResponse{
+		Id:     jobInfo.Job.Id,
+		Status: jobInfo.Job.Status,
+		Result: jobInfo.Job.Result,
+	})
 }
 
 // 构建任务

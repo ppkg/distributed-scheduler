@@ -50,6 +50,16 @@ func (s jobRepositoryImpl) List(db *gorm.DB, params map[string]interface{}) ([]*
 	return list, nil
 }
 
+// 更新job状态
+func (s jobRepositoryImpl) UpdateStatus(db *gorm.DB, model *model.Job) error {
+	err := db.Where("id=?", model.Id).Select("status,result,finish_time").Updates(model).Error
+	if err != nil {
+		glog.Errorf("jobRepositoryImpl/UpdateStatus 更新job状态异常,参数:%s,err:%+v", kit.JsonEncode(model), err)
+		return err
+	}
+	return nil
+}
+
 func NewJobRepository() repository.JobRepository {
 	return jobRepositoryImpl{}
 }

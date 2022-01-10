@@ -3,6 +3,8 @@ package dto
 import (
 	"distributed-scheduler/enum"
 	"distributed-scheduler/model"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 )
@@ -11,7 +13,7 @@ type JobInfo struct {
 	Done     chan int
 	Job      *model.Job
 	TaskList []*model.Task
-	lock sync.Mutex
+	lock     sync.Mutex
 }
 
 // 初始化已完成task channel
@@ -37,8 +39,33 @@ func (s *JobInfo) FilterFinishEndTask() []*model.Task {
 	return taskList
 }
 
-func (s *JobInfo) AppendSafeTask(task *model.Task)  {
+func (s *JobInfo) AppendSafeTask(task *model.Task) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.TaskList=append(s.TaskList, task)
+	s.TaskList = append(s.TaskList, task)
+}
+
+// 合并数据
+func (s *JobInfo) Reduce() (string, error) {
+	taskList := s.FilterFinishEndTask()
+	var result []interface{}
+	var err error
+	for _, task := range taskList {
+		var output interface{}
+		err = json.Unmarshal([]byte(task.Output), &output)
+		if err != nil {
+			return "", fmt.Errorf("反序列化异常,data:%s,err:%+v", task.Output, err)
+		}
+		switch rs := output.(type) {
+		case []interface{}:
+			result = append(result, rs...)
+		default:
+			result = append(result, rs)
+		}
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("序列化异常,data:%+v,err:%+v", result, err)
+	}
+	return string(data), nil
 }
