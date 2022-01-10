@@ -1,7 +1,6 @@
 package model
 
 import (
-	"database/sql"
 	"time"
 )
 
@@ -27,7 +26,7 @@ type Task struct {
 	// 创建时间
 	CreateTime time.Time `gorm:"->"`
 	// 完成时间
-	FinishTime sql.NullTime
+	FinishTime time.Time
 }
 
 func (s Task) TableName() string {

@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"distributed-scheduler/enum"
 	"distributed-scheduler/model"
 	"distributed-scheduler/repository"
 
@@ -52,7 +53,13 @@ func (s jobRepositoryImpl) List(db *gorm.DB, params map[string]interface{}) ([]*
 
 // 更新job状态
 func (s jobRepositoryImpl) UpdateStatus(db *gorm.DB, model *model.Job) error {
-	err := db.Where("id=?", model.Id).Select("status,result,finish_time").Updates(model).Error
+	cols := []interface{}{
+		"result",
+	}
+	if model.Status == enum.FinishJobStatus {
+		cols = append(cols, "finish_time")
+	}
+	err := db.Where("id=?", model.Id).Select("status", cols...).Updates(model).Error
 	if err != nil {
 		glog.Errorf("jobRepositoryImpl/UpdateStatus 更新job状态异常,参数:%s,err:%+v", kit.JsonEncode(model), err)
 		return err

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"distributed-scheduler/core"
 	"distributed-scheduler/dto"
 	"distributed-scheduler/enum"
@@ -88,11 +87,10 @@ func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 			return err
 		}
 		jobInfo.Job.Result = result
-		jobInfo.Job.FinishTime = sql.NullTime{
-			Time: time.Now(),
-		}
 	}
+
 	// 保存job状态
+	jobInfo.Job.FinishTime = time.Now()
 	err = s.jobRepo.UpdateStatus(s.appCtx.Db, jobInfo.Job)
 	if err != nil {
 		glog.Errorf("jobService/SyncSubmit 更新job状态异常,id:%d,err:%+v", jobInfo.Job.Id, err)
@@ -123,6 +121,8 @@ func (s *jobService) taskCallback(ctx context.Context, job *dto.JobInfo, task *m
 	return func() {
 		glog.Infof("当前任务执行结果,name:%s,id:%d,jobId:%d,status:%d(%s),nodeId:%s,output:%s,input:%s", task.Name, task.Id, task.JobId, task.Status, enum.TaskStatusMap[task.Status], task.NodeId, task.Output, task.Input)
 
+		// 保存任务状态
+		task.FinishTime = time.Now()
 		err := s.taskRepo.UpdateStatus(s.appCtx.Db, task)
 		if err != nil {
 			glog.Errorf("jobService/taskCallback 持久化task状态失败,id:%d,err:%+v", task.Id, err)

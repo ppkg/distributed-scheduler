@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"distributed-scheduler/enum"
 	"distributed-scheduler/model"
 	"distributed-scheduler/repository"
 
@@ -38,7 +39,13 @@ func (s taskRepositoryImpl) List(db *gorm.DB, params map[string]interface{}) ([]
 
 // 更新task状态
 func (s taskRepositoryImpl) UpdateStatus(db *gorm.DB, model *model.Task) error {
-	err := db.Where("id=?", model.Id).Select("status,output,node_id,endpoint,finish_time").Updates(model).Error
+	cols := []interface{}{
+		"output", "node_id", "endpoint",
+	}
+	if model.Status == enum.FinishTaskStatus {
+		cols = append(cols, "finish_time")
+	}
+	err := db.Where("id=?", model.Id).Select("status", cols...).Updates(model).Error
 	if err != nil {
 		glog.Errorf("taskRepositoryImpl/UpdateStatus 更新task状态异常,参数:%s,err:%+v", kit.JsonEncode(model), err)
 		return err
