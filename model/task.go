@@ -8,6 +8,8 @@ import (
 type Task struct {
 	Id    int64 `gorm:"primaryKey"`
 	JobId int64
+	// task分片
+	Sharding int32
 	// task名称
 	Name string
 	// 当前任务处理插件

@@ -1,8 +1,10 @@
 package service
 
 import (
+	"context"
 	"distributed-scheduler/core"
 	"distributed-scheduler/dto"
+	"distributed-scheduler/enum"
 	"distributed-scheduler/errCode"
 	"distributed-scheduler/model"
 	"distributed-scheduler/proto/job"
@@ -11,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync/atomic"
 
 	"github.com/ppkg/glog"
 	"gorm.io/gorm"
@@ -43,20 +46,118 @@ func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 	}
 
 	// 重新加载最新job信息
-	jobInfo, err = s.reloadJobInfo(jobInfo.Job.Id)
+	jobInfo, err = s.reloadJobInfo(jobInfo)
 	if err != nil {
 		glog.Errorf("jobService/SyncSubmit 重新加载最新job信息异常,err:%+v", err)
 		return err
 	}
+	jobInfo.InitDoneChannel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancelParam := &core.CancelTaskParam{
+		CancelFunc: cancel,
+	}
+	ctx = context.WithValue(ctx, core.CancelTaskKey{}, cancelParam)
+	defer func() {
+		if atomic.CompareAndSwapInt32(&cancelParam.IsCancel, 0, 1) {
+			cancelParam.CancelFunc()
+		}
+	}()
+
+	s.appCtx.Scheduler.Put(jobInfo,s.buildTasks(ctx, jobInfo)...)
+
+	for _ = range jobInfo.Done {
+		endTasks := jobInfo.FilterFinishEndTask()
+		glog.Infof("当前job状态:%d,%s,共%个task,已完成%个", jobInfo.Job.Id, jobInfo.Job.Name, jobInfo.Job.Size, len(endTasks))
+		if jobInfo.Job.Size == int32(len(endTasks)) {
+			close(jobInfo.Done)
+		}
+	}
+
+	if cancelParam.IsCancel==1 {
+		jobInfo.Job.Status = enum.ExceptionJobStatus
+		jobInfo.Job.Result=cancelParam.Reason
+	}
+	// 保存job状态
+	
 
 	return stream.SendAndClose(&job.SyncSubmitResponse{})
 }
 
+// 构建任务
+func (s *jobService) buildTasks(ctx context.Context, jobInfo *dto.JobInfo) []core.InputTask {
+	taskList := make([]core.InputTask, 0, len(jobInfo.TaskList))
+	for _, item := range jobInfo.TaskList {
+		taskList = append(taskList, core.InputTask{
+			Ctx:      ctx,
+			Task:     item,
+			Callback: s.taskCallback(ctx, jobInfo, item),
+		})
+	}
+	return taskList
+}
+
+func (s *jobService) taskCallback(ctx context.Context, job *dto.JobInfo, task *model.Task) func() {
+	return func() {
+		glog.Infof("当前任务执行结果,name:%s,id:%d,jobId:%d,status:%d(%s),nodeId:%s,output:%s,input:%s", task.Name, task.Id, task.JobId, task.Status, enum.TaskStatusMap[task.Status], task.NodeId, task.Output, task.Input)
+
+		err := s.taskRepo.UpdateStatus(s.appCtx.Db, task)
+		if err != nil {
+			glog.Errorf("jobService/taskCallback 持久化task状态失败,id:%d,err:%+v", task.Id, err)
+			s.cancelNotify(ctx, job, task, err)
+			return
+		}
+
+		// 判断是否继续创建下一个
+		pos := s.findPluginPos(job.Job.PluginSet, task.Plugin)
+		if pos == -1 {
+			glog.Errorf("jobService/taskCallback job找不到plugin(%s),id:%d", task.Plugin, task.Id)
+			s.cancelNotify(ctx, job, task, err)
+		}
+		// 如果最后一个插件处理完毕就直接返回
+		if pos == int(job.Job.Size)-1 {
+			job.Done <- 1
+			return
+		}
+
+		// 创建新task并放入调度器执行
+		job.AppendSafeTask(&model.Task{
+			Sharding: task.Sharding,
+			Name:     task.Name,
+			Input:    task.Output,
+			Plugin:   strings.Split(job.Job.PluginSet, ",")[pos+1],
+		})
+
+	}
+}
+
+func (s *jobService) findPluginPos(pluginSet string, plugin string) int {
+	for i, item := range strings.Split(pluginSet, ",") {
+		if item == plugin {
+			return i
+		}
+	}
+	return -1
+}
+
+// 取消通知
+func (s *jobService) cancelNotify(ctx context.Context, job *dto.JobInfo, task *model.Task, err error) {
+	// 通知未执行task取消操作
+	cancelParam := ctx.Value(core.CancelTaskKey{}).(*core.CancelTaskParam)
+	cancelParam.Reason = fmt.Sprintf("任务(%d,%s)更新task状态失败,%+v", task.Id, task.Name, err)
+	if atomic.CompareAndSwapInt32(&cancelParam.IsCancel, 0, 1) {
+		close(job.Done)
+		cancelParam.CancelFunc()
+	}
+}
+
 // 重新加载job信息
-func (s *jobService) reloadJobInfo(id int64) (dto.JobInfo, error) {
-	var jobInfo dto.JobInfo
+func (s *jobService) reloadJobInfo(jobInfo *dto.JobInfo) (*dto.JobInfo, error) {
+	if jobInfo == nil {
+		jobInfo = &dto.JobInfo{}
+	}
 	var err error
-	jobInfo.Job, err = s.jobRepo.FindById(s.appCtx.Db, id)
+	jobInfo.Job, err = s.jobRepo.FindById(s.appCtx.Db, jobInfo.Job.Id)
 	if err != nil {
 		return jobInfo, err
 	}
@@ -64,13 +165,13 @@ func (s *jobService) reloadJobInfo(id int64) (dto.JobInfo, error) {
 		return jobInfo, errCode.ToGrpcErr(errCode.ErrJobNotFound)
 	}
 	jobInfo.TaskList, err = s.taskRepo.List(s.appCtx.Db, map[string]interface{}{
-		"jobId": id,
+		"jobId": jobInfo.Job.Id,
 	})
 	return jobInfo, err
 }
 
 // 持久化job信息
-func (s *jobService) persistence(jobInfo dto.JobInfo) error {
+func (s *jobService) persistence(jobInfo *dto.JobInfo) error {
 	return s.appCtx.Db.Transaction(func(tx *gorm.DB) error {
 		err := s.jobRepo.Save(tx, jobInfo.Job)
 		if err != nil {
@@ -84,10 +185,10 @@ func (s *jobService) persistence(jobInfo dto.JobInfo) error {
 }
 
 // 接收job信息
-func (s *jobService) receiveJobStream(stream job.JobService_SyncSubmitServer) (dto.JobInfo, error) {
-	var jobInfo dto.JobInfo
+func (s *jobService) receiveJobStream(stream job.JobService_SyncSubmitServer) (*dto.JobInfo, error) {
+	jobInfo := &dto.JobInfo{}
 	var firstPlugin string
-	pos := 1
+	var sharding int32 = 0
 	for {
 		r, err := stream.Recv()
 		if err == io.EOF {
@@ -108,12 +209,13 @@ func (s *jobService) receiveJobStream(stream job.JobService_SyncSubmitServer) (d
 			}
 			firstPlugin = r.PluginSet[0]
 		}
-		jobInfo.TaskList = append(jobInfo.TaskList, &model.Task{
-			Name:   fmt.Sprintf("%s-%d", jobInfo.Job.Name, pos),
-			Input:  r.Data,
-			Plugin: firstPlugin,
+		jobInfo.AppendSafeTask(&model.Task{
+			Sharding: sharding,
+			Name:     fmt.Sprintf("%s-%d", jobInfo.Job.Name, sharding),
+			Input:    r.Data,
+			Plugin:   firstPlugin,
 		})
-		pos++
+		sharding++
 	}
 
 	jobInfo.Job.Size = int32(len(jobInfo.TaskList))

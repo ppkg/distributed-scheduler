@@ -7,3 +7,10 @@ const (
 	FinishTaskStatus    int32 = 2
 	ExceptionTaskStatus int32 = 3
 )
+
+var TaskStatusMap=map[int32]string{
+	PendingTaskStatus:"待执行",
+	DoingTaskStatus:"执行中",
+	FinishTaskStatus:"执行完成",
+	ExceptionTaskStatus:"异常退出",
+}

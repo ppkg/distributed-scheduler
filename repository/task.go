@@ -11,4 +11,6 @@ type TaskRepository interface {
 	BatchSave(db *gorm.DB, list []*model.Task) error
 	// 查询task列表
 	List(db *gorm.DB, params map[string]interface{}) ([]*model.Task, error)
+	// 更新task状态
+	UpdateStatus(db *gorm.DB, model *model.Task) error
 }

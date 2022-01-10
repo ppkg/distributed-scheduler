@@ -36,6 +36,16 @@ func (s taskRepositoryImpl) List(db *gorm.DB, params map[string]interface{}) ([]
 	return list, nil
 }
 
+// 更新task状态
+func (s taskRepositoryImpl) UpdateStatus(db *gorm.DB, model *model.Task) error {
+	err := db.Where("id=?", model.Id).Select("status,output,node_id,endpoint,finish_time").Updates(model).Error
+	if err != nil {
+		glog.Errorf("taskRepositoryImpl/UpdateStatus 更新task状态异常,参数:%s,err:%+v", kit.JsonEncode(model), err)
+		return err
+	}
+	return nil
+}
+
 func NewTaskRepository() repository.TaskRepository {
 	return taskRepositoryImpl{}
 }

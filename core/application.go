@@ -39,7 +39,7 @@ type ApplicationContext struct {
 	namingClient    namingClient.INamingClient
 	heartbeatKeeper heartbeatMap
 	Db              *gorm.DB
-	scheduler       *ScheduleEngine
+	Scheduler       *ScheduleEngine
 }
 
 func NewApp(opts ...Option) *ApplicationContext {
@@ -64,7 +64,7 @@ func (s *ApplicationContext) cronCheckHeartbeatStatus() {
 			if now.Sub(item.AccessTime) < 3*time.Second {
 				continue
 			}
-			s.scheduler.WorkerIndexer.RemoveWorker(item.WorkerNode)
+			s.Scheduler.WorkerIndexer.RemoveWorker(item.WorkerNode)
 			s.heartbeatKeeper.Remove(item.NodeId)
 			glog.Infof("ApplicationContext/checkHeartbeatStatus 心跳断开worker节点(%v,%v)被移除", item.NodeId, item.Endpoint)
 		}
@@ -75,7 +75,7 @@ func (s *ApplicationContext) cronCheckHeartbeatStatus() {
 func (s *ApplicationContext) UpdateHeartbeat(worker WorkerNode) {
 	oldWorker, ok := s.heartbeatKeeper.Get(worker.NodeId)
 	if !ok {
-		s.scheduler.WorkerIndexer.AddWorker(worker)
+		s.Scheduler.WorkerIndexer.AddWorker(worker)
 		s.heartbeatKeeper.Put(worker)
 		glog.Infof("ApplicationContext/checkHeartbeatStatus 新增worker节点(%s,%s),支持插件:%v", worker.NodeId, worker.Endpoint, worker.PluginSet)
 		return
@@ -87,8 +87,8 @@ func (s *ApplicationContext) UpdateHeartbeat(worker WorkerNode) {
 	})
 	// 如果worker节点支持插件集有变动时需要更新索引
 	if !cmp.Equal(worker.PluginSet, oldWorker.PluginSet, trans) {
-		s.scheduler.WorkerIndexer.RemoveWorker(oldWorker.WorkerNode)
-		s.scheduler.WorkerIndexer.AddWorker(worker)
+		s.Scheduler.WorkerIndexer.RemoveWorker(oldWorker.WorkerNode)
+		s.Scheduler.WorkerIndexer.AddWorker(worker)
 	}
 
 	oldWorker.AccessTime = time.Now()
@@ -151,7 +151,7 @@ func (s *ApplicationContext) appendNacosAddrConfig(addr string) {
 func (s *ApplicationContext) Run() error {
 	ctx := context.Background()
 	// 初始化调度器引擎
-	s.scheduler = NewScheduler(s.conf.SchedulerThreadCount)
+	s.Scheduler = NewScheduler(s.conf.SchedulerThreadCount)
 
 	// 注册服务(服务发现)
 	err := s.initNacos()

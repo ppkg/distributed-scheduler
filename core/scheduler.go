@@ -2,13 +2,16 @@ package core
 
 import (
 	"context"
+	"distributed-scheduler/dto"
 	"distributed-scheduler/enum"
 	"distributed-scheduler/errCode"
 	"distributed-scheduler/model"
 	"distributed-scheduler/proto/task"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
+	"github.com/panjf2000/ants/v2"
 	"github.com/ppkg/glog"
 	"github.com/ppkg/kit"
 	"google.golang.org/grpc"
@@ -17,13 +20,14 @@ import (
 
 // 调度引擎
 type ScheduleEngine struct {
-	// 调度器线程数
-	threadCount int
 	// worker节点缓存器
 	WorkerIndexer *WorkerIndexer
 	lock          sync.RWMutex
 	roundRobinMap map[string]*safeUint32
-	taskChannel   chan InputTask
+
+	// 调度器线程数
+	threadCount  int
+	schedulePool *ants.Pool
 
 	workerConns workerConnMap
 }
@@ -32,35 +36,16 @@ func NewScheduler(thread int) *ScheduleEngine {
 	engine := &ScheduleEngine{
 		threadCount:   thread,
 		WorkerIndexer: NewWorkerIndexer(),
-		taskChannel:   make(chan InputTask),
 		workerConns: workerConnMap{
 			cache: make(map[string]*grpc.ClientConn),
 		},
 	}
-	engine.init()
+	var err error
+	engine.schedulePool, err = ants.NewPool(thread)
+	if err != nil {
+		glog.Errorf("创建调度器异常,err:%+v", err)
+	}
 	return engine
-}
-
-// 初始化引擎
-func (s *ScheduleEngine) init() {
-	for i := 0; i < s.threadCount; i++ {
-		go s.runScheduleThead()
-	}
-}
-
-// 运行调度线程
-func (s *ScheduleEngine) runScheduleThead() {
-	for task := range s.taskChannel {
-		err := s.processTask(task.Task)
-		if err != nil {
-			// 推送失败
-			task.Task.Status = enum.ExceptionTaskStatus
-			task.Task.Output = err.Error()
-		} else {
-			task.Task.Status = enum.FinishTaskStatus
-		}
-		task.Callback()
-	}
 }
 
 // 推送任务
@@ -135,8 +120,17 @@ func (s *ScheduleEngine) predicateWorker(plugin string) ([]WorkerNode, error) {
 }
 
 type InputTask struct {
+	Ctx      context.Context
 	Task     *model.Task
 	Callback func()
+}
+type CancelTaskKey struct{}
+type CancelTaskParam struct {
+	CancelFunc context.CancelFunc
+	// 取消原因
+	Reason string
+	// 上下文是否已取消,0：否，1:系统错误而取消，2：用户手动取消
+	IsCancel int32
 }
 
 type workerConnMap struct {
@@ -196,11 +190,47 @@ func (s *ScheduleEngine) getAndIncr(key string) uint32 {
 	return rs
 }
 
-func (s *ScheduleEngine) Put(tasks ...InputTask) {
+// 添加需要调度的task
+func (s *ScheduleEngine) Put(job *dto.JobInfo, tasks ...InputTask) {
 	if len(tasks) == 0 {
 		return
 	}
 	for _, item := range tasks {
-		s.taskChannel <- item
+		s.run(job, item)
+	}
+}
+
+// 执行调度任务
+func (s *ScheduleEngine) run(job *dto.JobInfo, task InputTask) {
+	s.schedulePool.Submit(func() {
+		select {
+		case <-task.Ctx.Done():
+			cancelParam := task.Ctx.Value(CancelTaskKey{}).(*CancelTaskParam)
+			// 如果有其他任务处理异常则直接跳过，不执行任何处理
+			glog.Warningf("退出当前任务(%d,%s)，其他任务执行失败:%s", task.Task.Id, task.Task.Name, cancelParam.Reason)
+			return
+		default:
+			err := s.processTask(task.Task)
+			if err != nil {
+				// 推送失败
+				task.Task.Status = enum.ExceptionTaskStatus
+				task.Task.Output = err.Error()
+				s.cancelNotify(job, task, err)
+			} else {
+				task.Task.Status = enum.FinishTaskStatus
+			}
+			task.Callback()
+		}
+	})
+}
+
+// 取消通知
+func (s *ScheduleEngine) cancelNotify(job *dto.JobInfo, task InputTask, err error) {
+	// 通知其他task执行取消操作
+	cancelParam := task.Ctx.Value(CancelTaskKey{}).(*CancelTaskParam)
+	cancelParam.Reason = fmt.Sprintf("任务(%d,%s)执行失败,%+v", task.Task.Id, task.Task.Name, err)
+	if atomic.CompareAndSwapInt32(&cancelParam.IsCancel, 0, 1) {
+		close(job.Done)
+		cancelParam.CancelFunc()
 	}
 }

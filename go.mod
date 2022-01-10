@@ -12,6 +12,7 @@ require (
 	github.com/jinzhu/now v1.1.4 // indirect
 	github.com/limitedlee/microservice v0.1.0
 	github.com/nacos-group/nacos-sdk-go v1.0.9
+	github.com/panjf2000/ants/v2 v2.4.7 // indirect
 	github.com/ppkg/glog v0.0.0-20210823095502-427659edeb41
 	github.com/ppkg/kit v0.0.0-20210823101229-cd1ff728fbc4
 	google.golang.org/grpc v1.43.0
