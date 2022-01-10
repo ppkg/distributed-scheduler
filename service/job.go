@@ -11,6 +11,7 @@ import (
 	"distributed-scheduler/proto/job"
 	"distributed-scheduler/repository"
 	"distributed-scheduler/repository/impl"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -130,14 +131,22 @@ func (s *jobService) taskCallback(ctx context.Context, job *dto.JobInfo, task *m
 			return
 		}
 
+		// 判断任务是否执行异常，异常则通知其他task停止执行
+		if task.Status != enum.FinishTaskStatus {
+			s.cancelNotify(ctx, job, task, errors.New(task.Output))
+			return
+		}
+
 		// 判断是否继续创建下一个
 		pos := s.findPluginPos(job.Job.PluginSet, task.Plugin)
 		if pos == -1 {
 			glog.Errorf("jobService/taskCallback job找不到plugin(%s),id:%d", task.Plugin, task.Id)
 			s.cancelNotify(ctx, job, task, err)
+			return
 		}
 		// 如果最后一个插件处理完毕就直接返回
-		if pos == int(job.Job.Size)-1 {
+		cancelParam := ctx.Value(core.CancelTaskKey{}).(*core.CancelTaskParam)
+		if cancelParam.IsCancel == enum.NormalRuning && pos == len(strings.Split(job.Job.PluginSet, ","))-1 {
 			job.Done <- 1
 			return
 		}

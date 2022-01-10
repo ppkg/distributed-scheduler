@@ -36,6 +36,7 @@ func NewScheduler(thread int) *ScheduleEngine {
 	engine := &ScheduleEngine{
 		threadCount:   thread,
 		WorkerIndexer: NewWorkerIndexer(),
+		roundRobinMap: make(map[string]*safeUint32),
 		workerConns: workerConnMap{
 			cache: make(map[string]*grpc.ClientConn),
 		},
@@ -203,6 +204,14 @@ func (s *ScheduleEngine) Put(job *dto.JobInfo, tasks ...InputTask) {
 // 执行调度任务
 func (s *ScheduleEngine) run(job *dto.JobInfo, task InputTask) {
 	s.schedulePool.Submit(func() {
+		defer func() {
+			if panic := recover(); panic != nil {
+				err := fmt.Errorf("got panic:%v", panic)
+				task.Task.Status = enum.ExceptionTaskStatus
+				task.Task.Output = err.Error()
+				s.cancelNotify(job, task, err)
+			}
+		}()
 		select {
 		case <-task.Ctx.Done():
 			cancelParam := task.Ctx.Value(CancelTaskKey{}).(*CancelTaskParam)

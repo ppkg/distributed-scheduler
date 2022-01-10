@@ -11,6 +11,8 @@ const (
 )
 
 const (
+	// 正常运行
+	NormalRuning int32 = 0
 	// 异常退出
 	ExceptionCancel int32 = 1
 	// 手动取消
