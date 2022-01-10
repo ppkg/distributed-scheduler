@@ -71,9 +71,8 @@ func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 
 	for range jobInfo.Done {
 		endTasks := jobInfo.FilterFinishEndTask()
-		glog.Infof("当前job状态:%d,%s,共%d个task,已完成%d个", jobInfo.Job.Id, jobInfo.Job.Name, jobInfo.Job.Size, len(endTasks))
 		if jobInfo.Job.Size == int32(len(endTasks)) {
-			close(jobInfo.Done)
+			break
 		}
 	}
 

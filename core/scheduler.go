@@ -4,7 +4,6 @@ import (
 	"context"
 	"distributed-scheduler/dto"
 	"distributed-scheduler/enum"
-	"distributed-scheduler/errCode"
 	"distributed-scheduler/model"
 	"distributed-scheduler/proto/task"
 	"fmt"
@@ -115,7 +114,7 @@ func (s *ScheduleEngine) preferWorker(plugin string, list []WorkerNode) WorkerNo
 func (s *ScheduleEngine) predicateWorker(plugin string) ([]WorkerNode, error) {
 	workers := s.WorkerIndexer.GetPluginWorker(plugin)
 	if len(workers) == 0 {
-		return nil, errCode.ToGrpcErr(errCode.ErrPluginUnsupport, plugin)
+		return nil, fmt.Errorf("没有支持插件(%s)的worker可调度", plugin)
 	}
 	return workers, nil
 }

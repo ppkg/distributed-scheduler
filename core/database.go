@@ -7,11 +7,14 @@ import (
 	"github.com/ppkg/glog"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	gormlog "gorm.io/gorm/logger"
 )
 
 func (s *ApplicationContext) initDatabase() error {
 	var err error
-	s.Db, err = gorm.Open(mysql.Open(config.GetString("mysql.distributed-scheduler")), &gorm.Config{})
+	s.Db, err = gorm.Open(mysql.Open(config.GetString("mysql.distributed-scheduler")), &gorm.Config{
+		Logger: gormlog.Default.LogMode(gormlog.Info),
+	})
 	if err != nil {
 		glog.Errorf("ApplicationContext/initDatabase 初始化数据库失败,err:%+v", err)
 		return err

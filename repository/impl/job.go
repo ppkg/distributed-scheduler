@@ -40,7 +40,7 @@ func (s jobRepositoryImpl) FindById(db *gorm.DB, id int64) (*model.Job, error) {
 func (s jobRepositoryImpl) List(db *gorm.DB, params map[string]interface{}) ([]*model.Job, error) {
 	var list []*model.Job
 	if val, ok := params["id"]; ok {
-		db.Where("id=?", val)
+		db = db.Where("id=?", val)
 	}
 	err := db.Find(&list).Error
 	if err != nil {

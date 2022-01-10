@@ -26,7 +26,7 @@ func (s taskRepositoryImpl) BatchSave(db *gorm.DB, list []*model.Task) error {
 func (s taskRepositoryImpl) List(db *gorm.DB, params map[string]interface{}) ([]*model.Task, error) {
 	var list []*model.Task
 	if val, ok := params["jobId"]; ok {
-		db.Where("job_id=?", val)
+		db = db.Where("job_id=?", val)
 	}
 	err := db.Find(&list).Error
 	if err != nil {
