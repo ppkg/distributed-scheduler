@@ -23,6 +23,15 @@ func (s taskRepositoryImpl) BatchSave(db *gorm.DB, list []*model.Task) error {
 	return nil
 }
 
+func (s taskRepositoryImpl) Save(db *gorm.DB, model *model.Task) error {
+	err := db.Create(model).Error
+	if err != nil {
+		glog.Errorf("taskRepositoryImpl/Save 保存单个task信息异常,参数:%s,err:%+v", kit.JsonEncode(model), err)
+		return err
+	}
+	return nil
+}
+
 // 查询task列表
 func (s taskRepositoryImpl) List(db *gorm.DB, params map[string]interface{}) ([]*model.Task, error) {
 	var list []*model.Task

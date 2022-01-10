@@ -66,7 +66,7 @@ func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 		}
 	}()
 
-	s.appCtx.Scheduler.Put(jobInfo, s.buildTasks(ctx, jobInfo)...)
+	s.appCtx.Scheduler.Put(jobInfo, s.buildTasks(ctx, jobInfo, jobInfo.TaskList)...)
 
 	for range jobInfo.Done {
 		endTasks := jobInfo.FilterFinishEndTask()
@@ -105,21 +105,21 @@ func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 }
 
 // 构建任务
-func (s *jobService) buildTasks(ctx context.Context, jobInfo *dto.JobInfo) []core.InputTask {
-	taskList := make([]core.InputTask, 0, len(jobInfo.TaskList))
-	for _, item := range jobInfo.TaskList {
-		taskList = append(taskList, core.InputTask{
+func (s *jobService) buildTasks(ctx context.Context, jobInfo *dto.JobInfo, taskList []*model.Task) []core.InputTask {
+	list := make([]core.InputTask, 0, len(taskList))
+	for _, item := range taskList {
+		list = append(list, core.InputTask{
 			Ctx:      ctx,
 			Task:     item,
 			Callback: s.taskCallback(ctx, jobInfo, item),
 		})
 	}
-	return taskList
+	return list
 }
 
 func (s *jobService) taskCallback(ctx context.Context, job *dto.JobInfo, task *model.Task) func() {
 	return func() {
-		glog.Infof("当前任务执行结果,name:%s,id:%d,jobId:%d,status:%d(%s),nodeId:%s,output:%s,input:%s", task.Name, task.Id, task.JobId, task.Status, enum.TaskStatusMap[task.Status], task.NodeId, task.Output, task.Input)
+		glog.Infof("当前任务执行结果,name:%s,id:%d,jobId:%d,status:%d(%s),nodeId:%s,plugin:%s,output:%s,input:%s", task.Name, task.Id, task.JobId, task.Status, enum.TaskStatusMap[task.Status], task.NodeId, task.Plugin, task.Output, task.Input)
 
 		// 保存任务状态
 		task.FinishTime = time.Now()
@@ -151,13 +151,22 @@ func (s *jobService) taskCallback(ctx context.Context, job *dto.JobInfo, task *m
 		}
 
 		// 创建新task并放入调度器执行
-		job.AppendSafeTask(&model.Task{
+		newTask := &model.Task{
 			Sharding: task.Sharding,
 			Name:     task.Name,
 			Input:    task.Output,
 			Plugin:   strings.Split(job.Job.PluginSet, ",")[pos+1],
-		})
-
+		}
+		// 持久化新task任务
+		err = s.taskRepo.Save(s.appCtx.Db, newTask)
+		if err != nil {
+			glog.Errorf("jobService/taskCallback 持久化新task失败,id:%d,err:%+v", newTask.Id, err)
+			s.cancelNotify(ctx, job, newTask, err)
+			return
+		}
+		job.AppendSafeTask(newTask)
+		// 调度新的task
+		s.appCtx.Scheduler.Put(job, s.buildTasks(ctx, job, []*model.Task{newTask})...)
 	}
 }
 
@@ -174,7 +183,7 @@ func (s *jobService) findPluginPos(pluginSet string, plugin string) int {
 func (s *jobService) cancelNotify(ctx context.Context, job *dto.JobInfo, task *model.Task, err error) {
 	// 通知未执行task取消操作
 	cancelParam := ctx.Value(core.CancelTaskKey{}).(*core.CancelTaskParam)
-	cancelParam.Reason = fmt.Sprintf("任务(%d,%s)更新task状态失败,%+v", task.Id, task.Name, err)
+	cancelParam.Reason = fmt.Sprintf("task(%d,%s)数据保存失败,%+v", task.Id, task.Name, err)
 	if atomic.CompareAndSwapInt32(&cancelParam.IsCancel, 0, 1) {
 		close(job.Done)
 		cancelParam.CancelFunc()
