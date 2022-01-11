@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"distributed-scheduler/repository"
+	"distributed-scheduler/repository/impl"
 	"distributed-scheduler/util"
 	"fmt"
 	"net"
@@ -39,7 +41,10 @@ type ApplicationContext struct {
 	namingClient    namingClient.INamingClient
 	heartbeatKeeper heartbeatMap
 	Db              *gorm.DB
-	Scheduler       *ScheduleEngine
+	Scheduler       *scheduleEngine
+	JobContainer    *runningJobContainer
+	jobRepo         repository.JobRepository
+	taskRepo        repository.TaskRepository
 }
 
 func NewApp(opts ...Option) *ApplicationContext {
@@ -47,6 +52,8 @@ func NewApp(opts ...Option) *ApplicationContext {
 		heartbeatKeeper: heartbeatMap{
 			data: make(map[string]*heartbeat),
 		},
+		jobRepo:  impl.NewJobRepository(),
+		taskRepo: impl.NewTaskRepository(),
 	}
 	instance.initDefaultConfig()
 	for _, m := range opts {
@@ -92,6 +99,24 @@ func (s *ApplicationContext) UpdateHeartbeat(worker WorkerNode) {
 	}
 
 	oldWorker.AccessTime = time.Now()
+}
+
+// 监控raft master节点
+// 当前节点失去leader身份时需要取消正在运行job
+// 当前节点选举为leader身份时需要加载未完成异步job
+func (s *ApplicationContext) watchRaftMaster() {
+	for isLeader := range s.raft.LeaderCh() {
+		if isLeader {
+			glog.Infof("当前raft节点(%s,%s)获取leader身份", s.conf.Raft.NodeId, s.getPeerAddr())
+
+			continue
+		}
+		glog.Infof("当前raft节点(%s,%s)失去leader身份", s.conf.Raft.NodeId, s.getPeerAddr())
+		for _, job := range s.JobContainer.GetAll() {
+			util.CancelNotify(job.Ctx, job.Job, fmt.Sprintf("当前raft节点(%s,%s)失去leader身份,取消正在运行任务", s.conf.Raft.NodeId, s.getPeerAddr()))
+		}
+		s.JobContainer.RemoveAll()
+	}
 }
 
 // 初始化默认配置
@@ -153,6 +178,8 @@ func (s *ApplicationContext) Run() error {
 	ctx := context.Background()
 	// 初始化调度器引擎
 	s.Scheduler = NewScheduler(s.conf.SchedulerThreadCount)
+	// 初始化job容器
+	s.JobContainer = NewJobContainer()
 
 	// 注册服务(服务发现)
 	err := s.initNacos()
@@ -184,6 +211,8 @@ func (s *ApplicationContext) Run() error {
 
 	// 定时检查worker心跳状态
 	go s.cronCheckHeartbeatStatus()
+	// 监控raft身份并及时处理
+	go s.watchRaftMaster()
 
 	// 初始化grpc服务
 	err = s.doServe()

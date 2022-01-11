@@ -9,7 +9,6 @@ import (
 	"distributed-scheduler/util"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	"github.com/panjf2000/ants/v2"
 	"github.com/ppkg/glog"
@@ -19,7 +18,7 @@ import (
 )
 
 // 调度引擎
-type ScheduleEngine struct {
+type scheduleEngine struct {
 	// worker节点缓存器
 	WorkerIndexer *WorkerIndexer
 	lock          sync.RWMutex
@@ -32,8 +31,8 @@ type ScheduleEngine struct {
 	workerConns workerConnMap
 }
 
-func NewScheduler(thread int) *ScheduleEngine {
-	engine := &ScheduleEngine{
+func NewScheduler(thread int) *scheduleEngine {
+	engine := &scheduleEngine{
 		threadCount:   thread,
 		WorkerIndexer: NewWorkerIndexer(),
 		roundRobinMap: make(map[string]*safeUint32),
@@ -51,7 +50,7 @@ func NewScheduler(thread int) *ScheduleEngine {
 }
 
 // 推送任务
-func (s *ScheduleEngine) processTask(task *model.Task) error {
+func (s *scheduleEngine) processTask(task *model.Task) error {
 	workers, err := s.predicateWorker(task.Plugin)
 	if err != nil {
 		glog.Errorf("ScheduleEngine/processTask 预选worker节点异常,taskId:%d,err:%+v", task.Id, err)
@@ -72,7 +71,7 @@ func (s *ScheduleEngine) processTask(task *model.Task) error {
 }
 
 // 推送任务给worker执行
-func (s *ScheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
+func (s *scheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
 	t.NodeId = worker.NodeId
 	t.Endpoint = worker.Endpoint
 	t.Status = enum.DoingTaskStatus
@@ -102,14 +101,14 @@ func (s *ScheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
 }
 
 // 优选worker工作节点
-func (s *ScheduleEngine) preferWorker(plugin string, list []WorkerNode) WorkerNode {
+func (s *scheduleEngine) preferWorker(plugin string, list []WorkerNode) WorkerNode {
 	pos := s.getAndIncr(plugin)
 	i := pos % uint32(len(list))
 	return list[i]
 }
 
 // 预选worker工作节点
-func (s *ScheduleEngine) predicateWorker(plugin string) ([]WorkerNode, error) {
+func (s *scheduleEngine) predicateWorker(plugin string) ([]WorkerNode, error) {
 	workers := s.WorkerIndexer.GetPluginWorker(plugin)
 	if len(workers) == 0 {
 		return nil, fmt.Errorf("没有支持插件(%s)的worker可调度", plugin)
@@ -121,14 +120,6 @@ type InputTask struct {
 	Ctx      context.Context
 	Task     *model.Task
 	Callback func()
-}
-type CancelTaskKey struct{}
-type CancelTaskParam struct {
-	CancelFunc context.CancelFunc
-	// 取消原因
-	Reason string
-	// 上下文是否已取消,0：否，1:系统错误而取消，2：用户手动取消
-	IsCancel int32
 }
 
 type workerConnMap struct {
@@ -172,7 +163,7 @@ func (s *safeUint32) GetAndIncr() uint32 {
 }
 
 // 返回并自增+1
-func (s *ScheduleEngine) getAndIncr(key string) uint32 {
+func (s *scheduleEngine) getAndIncr(key string) uint32 {
 	s.lock.RLock()
 	val, ok := s.roundRobinMap[key]
 	s.lock.RUnlock()
@@ -189,7 +180,7 @@ func (s *ScheduleEngine) getAndIncr(key string) uint32 {
 }
 
 // 添加需要调度的task
-func (s *ScheduleEngine) Put(job *dto.JobInfo, tasks ...InputTask) {
+func (s *scheduleEngine) Put(job *dto.JobInfo, tasks ...InputTask) {
 	if len(tasks) == 0 {
 		return
 	}
@@ -197,28 +188,28 @@ func (s *ScheduleEngine) Put(job *dto.JobInfo, tasks ...InputTask) {
 	for _, item := range tasks {
 		err = s.run(job, item)
 		if err != nil {
-			s.cancelNotify(job, item, "调度器线程池已满，无法调度task")
+			util.CancelNotify(item.Ctx, job, "调度器线程池已满，无法调度task")
 			job.Job.Status = enum.SystemExceptionJobStatus
 		}
 	}
 }
 
 // 执行调度任务
-func (s *ScheduleEngine) run(job *dto.JobInfo, task InputTask) error {
+func (s *scheduleEngine) run(job *dto.JobInfo, task InputTask) error {
 	err := s.schedulePool.Submit(func() {
 		defer func() {
 			if panic := recover(); panic != nil {
 				errMsg := fmt.Sprintf("运行task(%d,%s) panic:%+v,trace:%s", task.Task.Id, task.Task.Name, panic, util.PanicTrace(10))
 				task.Task.Status = enum.ExceptionTaskStatus
 				task.Task.Output = errMsg
-				s.cancelNotify(job, task, errMsg)
+				util.CancelNotify(task.Ctx, job, errMsg)
 				job.Job.Status = enum.SystemExceptionJobStatus
 				glog.Error(errMsg)
 			}
 		}()
 		select {
 		case <-task.Ctx.Done():
-			cancelParam := task.Ctx.Value(CancelTaskKey{}).(*CancelTaskParam)
+			cancelParam := task.Ctx.Value(dto.CancelTaskKey{}).(*dto.CancelTaskParam)
 			// 如果有其他任务处理异常则直接跳过，不执行任何处理
 			glog.Warningf("退出当前任务(%d,%s)，其他任务执行失败:%s", task.Task.Id, task.Task.Name, cancelParam.Reason)
 			return
@@ -229,7 +220,7 @@ func (s *ScheduleEngine) run(job *dto.JobInfo, task InputTask) error {
 				errMsg := fmt.Sprintf("推送task(%d,%s)失败,err:%+v", task.Task.Id, task.Task.Name, err)
 				task.Task.Status = enum.ExceptionTaskStatus
 				task.Task.Output = errMsg
-				s.cancelNotify(job, task, errMsg)
+				util.CancelNotify(task.Ctx, job, errMsg)
 				job.Job.Status = enum.PushFailJobStatus
 				glog.Error(errMsg)
 			}
@@ -241,15 +232,4 @@ func (s *ScheduleEngine) run(job *dto.JobInfo, task InputTask) error {
 		return err
 	}
 	return nil
-}
-
-// 取消通知
-func (s *ScheduleEngine) cancelNotify(job *dto.JobInfo, task InputTask, reason string) {
-	// 通知其他task执行取消操作
-	cancelParam := task.Ctx.Value(CancelTaskKey{}).(*CancelTaskParam)
-	cancelParam.Reason = reason
-	if atomic.CompareAndSwapInt32(&cancelParam.IsCancel, 0, 1) {
-		close(job.Done)
-		cancelParam.CancelFunc()
-	}
 }
