@@ -6,6 +6,7 @@ import (
 	"distributed-scheduler/enum"
 	"distributed-scheduler/model"
 	"distributed-scheduler/proto/task"
+	"distributed-scheduler/util"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -41,10 +42,11 @@ func NewScheduler(thread int) *ScheduleEngine {
 		},
 	}
 	var err error
-	engine.schedulePool, err = ants.NewPool(thread)
+	engine.schedulePool, err = ants.NewPool(thread, ants.WithNonblocking(true))
 	if err != nil {
-		glog.Errorf("创建调度器异常,err:%+v", err)
+		glog.Errorf("ScheduleEngine/NewScheduler 创建调度器异常,err:%+v", err)
 	}
+
 	return engine
 }
 
@@ -191,17 +193,22 @@ func (s *ScheduleEngine) Put(job *dto.JobInfo, tasks ...InputTask) {
 	if len(tasks) == 0 {
 		return
 	}
+	var err error
 	for _, item := range tasks {
-		s.run(job, item)
+		err = s.run(job, item)
+		if err != nil {
+			s.cancelNotify(job, item, "调度器线程池已满，无法调度task")
+			job.Job.Status = enum.SystemExceptionJobStatus
+		}
 	}
 }
 
 // 执行调度任务
-func (s *ScheduleEngine) run(job *dto.JobInfo, task InputTask) {
-	s.schedulePool.Submit(func() {
+func (s *ScheduleEngine) run(job *dto.JobInfo, task InputTask) error {
+	err := s.schedulePool.Submit(func() {
 		defer func() {
 			if panic := recover(); panic != nil {
-				errMsg := fmt.Sprintf("运行task(%d,%s) panic:%+v", task.Task.Id, task.Task.Name, panic)
+				errMsg := fmt.Sprintf("运行task(%d,%s) panic:%+v,trace:%s", task.Task.Id, task.Task.Name, panic, util.PanicTrace(10))
 				task.Task.Status = enum.ExceptionTaskStatus
 				task.Task.Output = errMsg
 				s.cancelNotify(job, task, errMsg)
@@ -229,6 +236,11 @@ func (s *ScheduleEngine) run(job *dto.JobInfo, task InputTask) {
 			task.Callback()
 		}
 	})
+	if err != nil {
+		glog.Errorf("当前线程池满了,容量:%d,已使用:%d,剩余:%d,taskId:%d,err:%+v", s.schedulePool.Cap(), s.schedulePool.Running(), s.schedulePool.Free(), task.Task.Id, err)
+		return err
+	}
+	return nil
 }
 
 // 取消通知

@@ -66,14 +66,17 @@ func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 		}
 	}()
 
-	s.appCtx.Scheduler.Put(jobInfo, s.buildTasks(ctx, jobInfo, jobInfo.TaskList)...)
-
-	// job超时处理
-	timeout := time.AfterFunc(time.Hour, func() {
-		s.cancelNotify(ctx, jobInfo, fmt.Sprintf("job(%d,%s)处理超时终止退出", jobInfo.Job.Id, jobInfo.Job.Name))
+	// job运行超时处理
+	timeout := time.AfterFunc(3*time.Hour, func() {
+		errMsg := fmt.Sprintf("job(%d,%s)处理超时终止运行,task数量:%d", jobInfo.Job.Id, jobInfo.Job.Name, jobInfo.Job.Size)
+		s.cancelNotify(ctx, jobInfo, errMsg)
 		jobInfo.Job.Status = enum.RunningTimeoutJobStatus
+		glog.Error(errMsg)
 	})
 	defer timeout.Stop()
+
+	// 构建task并移交给scheduler调度器来调度
+	s.appCtx.Scheduler.Put(jobInfo, s.buildTasks(ctx, jobInfo, jobInfo.TaskList)...)
 
 	for range jobInfo.Done {
 		endTasks := jobInfo.FilterFinishEndTask()
@@ -148,6 +151,12 @@ func (s *jobService) taskCallback(ctx context.Context, job *dto.JobInfo, task *m
 			return
 		}
 
+		// 判断当前task是不是被取消了，如果是则直接return
+		cancelParam := ctx.Value(core.CancelTaskKey{}).(*core.CancelTaskParam)
+		if cancelParam.IsCancel != enum.NormalRuning {
+			return
+		}
+
 		// 判断是否继续创建下一个
 		pos := s.findPluginPos(job.Job.PluginSet, task.Plugin)
 		if pos == -1 {
@@ -158,13 +167,13 @@ func (s *jobService) taskCallback(ctx context.Context, job *dto.JobInfo, task *m
 		}
 
 		// 如果最后一个插件处理完毕就直接返回
-		cancelParam := ctx.Value(core.CancelTaskKey{}).(*core.CancelTaskParam)
-		if cancelParam.IsCancel == enum.NormalRuning && pos == len(strings.Split(job.Job.PluginSet, ","))-1 {
+		if pos == len(strings.Split(job.Job.PluginSet, ","))-1 {
 			job.Done <- 1
 			return
 		}
 
 		// 创建新task并放入调度器执行
+		fmt.Println("newTask--->", job.Job.PluginSet, pos)
 		newTask := &model.Task{
 			JobId:    task.JobId,
 			Sharding: task.Sharding,
