@@ -10,7 +10,6 @@ import (
 	"distributed-scheduler/proto/job"
 	"distributed-scheduler/repository"
 	"distributed-scheduler/repository/impl"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ppkg/glog"
+	"github.com/ppkg/kit"
 	"gorm.io/gorm"
 )
 
@@ -68,19 +68,29 @@ func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 
 	s.appCtx.Scheduler.Put(jobInfo, s.buildTasks(ctx, jobInfo, jobInfo.TaskList)...)
 
+	// job超时处理
+	timeout := time.AfterFunc(time.Hour, func() {
+		s.cancelNotify(ctx, jobInfo, fmt.Sprintf("job(%d,%s)处理超时终止退出", jobInfo.Job.Id, jobInfo.Job.Name))
+		jobInfo.Job.Status = enum.RunningTimeoutJobStatus
+	})
+	defer timeout.Stop()
+
 	for range jobInfo.Done {
 		endTasks := jobInfo.FilterFinishEndTask()
 		if jobInfo.Job.Size == int32(len(endTasks)) {
+			jobInfo.Job.Status = enum.FinishJobStatus
 			break
 		}
 	}
 
+	// 记录取消原因
 	switch cancelParam.IsCancel {
 	case enum.ExceptionCancel:
-		jobInfo.Job.Status = enum.ExceptionJobStatus
 		jobInfo.Job.Result = cancelParam.Reason
-	default:
-		jobInfo.Job.Status = enum.FinishJobStatus
+	}
+
+	// 如果job是已完成状态则进行合并结果
+	if jobInfo.Job.Status == enum.FinishJobStatus {
 		result, err := jobInfo.Reduce()
 		if err != nil {
 			glog.Errorf("jobService/SyncSubmit 合并数据异常,%v", err)
@@ -126,13 +136,15 @@ func (s *jobService) taskCallback(ctx context.Context, job *dto.JobInfo, task *m
 		err := s.taskRepo.UpdateStatus(s.appCtx.Db, task)
 		if err != nil {
 			glog.Errorf("jobService/taskCallback 持久化task状态失败,id:%d,err:%+v", task.Id, err)
-			s.cancelNotify(ctx, job, task, err)
+			s.cancelNotify(ctx, job, fmt.Sprintf("持久化task(%d,%s)状态失败,%+v", task.Id, task.Name, err))
+			job.Job.Status = enum.SystemExceptionJobStatus
 			return
 		}
 
 		// 判断任务是否执行异常，异常则通知其他task停止执行
 		if task.Status != enum.FinishTaskStatus {
-			s.cancelNotify(ctx, job, task, errors.New(task.Output))
+			s.cancelNotify(ctx, job, fmt.Sprintf("task(%d,%s)业务处理失败,%s", task.Id, task.Name, task.Output))
+			job.Job.Status = enum.BusinessExceptionJobStatus
 			return
 		}
 
@@ -140,9 +152,11 @@ func (s *jobService) taskCallback(ctx context.Context, job *dto.JobInfo, task *m
 		pos := s.findPluginPos(job.Job.PluginSet, task.Plugin)
 		if pos == -1 {
 			glog.Errorf("jobService/taskCallback job找不到plugin(%s),id:%d", task.Plugin, task.Id)
-			s.cancelNotify(ctx, job, task, err)
+			s.cancelNotify(ctx, job, fmt.Sprintf("job(%d,%s)不支持plugin(%s)", job.Job.Id, job.Job.Name, task.Plugin))
+			job.Job.Status = enum.SystemExceptionJobStatus
 			return
 		}
+
 		// 如果最后一个插件处理完毕就直接返回
 		cancelParam := ctx.Value(core.CancelTaskKey{}).(*core.CancelTaskParam)
 		if cancelParam.IsCancel == enum.NormalRuning && pos == len(strings.Split(job.Job.PluginSet, ","))-1 {
@@ -160,8 +174,9 @@ func (s *jobService) taskCallback(ctx context.Context, job *dto.JobInfo, task *m
 		// 持久化新task任务
 		err = s.taskRepo.Save(s.appCtx.Db, newTask)
 		if err != nil {
-			glog.Errorf("jobService/taskCallback 持久化新task失败,id:%d,err:%+v", newTask.Id, err)
-			s.cancelNotify(ctx, job, newTask, err)
+			glog.Errorf("jobService/taskCallback 持久化新task失败,task:%s,err:%+v", kit.JsonEncode(newTask), err)
+			s.cancelNotify(ctx, job, fmt.Sprintf("新task(%s)持久化失败,jobId:%d,%+v", task.Name, newTask.JobId, err))
+			job.Job.Status = enum.SystemExceptionJobStatus
 			return
 		}
 		job.AppendSafeTask(newTask)
@@ -180,10 +195,10 @@ func (s *jobService) findPluginPos(pluginSet string, plugin string) int {
 }
 
 // 取消通知
-func (s *jobService) cancelNotify(ctx context.Context, job *dto.JobInfo, task *model.Task, err error) {
+func (s *jobService) cancelNotify(ctx context.Context, job *dto.JobInfo, reason string) {
 	// 通知未执行task取消操作
 	cancelParam := ctx.Value(core.CancelTaskKey{}).(*core.CancelTaskParam)
-	cancelParam.Reason = fmt.Sprintf("task(%d,%s)数据保存失败,%+v", task.Id, task.Name, err)
+	cancelParam.Reason = reason
 	if atomic.CompareAndSwapInt32(&cancelParam.IsCancel, 0, 1) {
 		close(job.Done)
 		cancelParam.CancelFunc()

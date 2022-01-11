@@ -96,10 +96,6 @@ func (s *ScheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
 
 	t.Status = resp.Status
 	t.Output = resp.Result
-
-	if t.Status != enum.FinishJobStatus {
-		return fmt.Errorf("status:%d,message:%s", t.Status, t.Output)
-	}
 	return nil
 }
 
@@ -205,10 +201,12 @@ func (s *ScheduleEngine) run(job *dto.JobInfo, task InputTask) {
 	s.schedulePool.Submit(func() {
 		defer func() {
 			if panic := recover(); panic != nil {
-				err := fmt.Errorf("got panic:%v", panic)
+				errMsg := fmt.Sprintf("运行task(%d,%s) panic:%+v", task.Task.Id, task.Task.Name, panic)
 				task.Task.Status = enum.ExceptionTaskStatus
-				task.Task.Output = err.Error()
-				s.cancelNotify(job, task, err)
+				task.Task.Output = errMsg
+				s.cancelNotify(job, task, errMsg)
+				job.Job.Status = enum.SystemExceptionJobStatus
+				glog.Error(errMsg)
 			}
 		}()
 		select {
@@ -221,11 +219,12 @@ func (s *ScheduleEngine) run(job *dto.JobInfo, task InputTask) {
 			err := s.processTask(task.Task)
 			if err != nil {
 				// 推送失败
+				errMsg := fmt.Sprintf("推送task(%d,%s)失败,err:%+v", task.Task.Id, task.Task.Name, err)
 				task.Task.Status = enum.ExceptionTaskStatus
-				task.Task.Output = err.Error()
-				s.cancelNotify(job, task, err)
-			} else {
-				task.Task.Status = enum.FinishTaskStatus
+				task.Task.Output = errMsg
+				s.cancelNotify(job, task, errMsg)
+				job.Job.Status = enum.PushFailJobStatus
+				glog.Error(errMsg)
 			}
 			task.Callback()
 		}
@@ -233,10 +232,10 @@ func (s *ScheduleEngine) run(job *dto.JobInfo, task InputTask) {
 }
 
 // 取消通知
-func (s *ScheduleEngine) cancelNotify(job *dto.JobInfo, task InputTask, err error) {
+func (s *ScheduleEngine) cancelNotify(job *dto.JobInfo, task InputTask, reason string) {
 	// 通知其他task执行取消操作
 	cancelParam := task.Ctx.Value(CancelTaskKey{}).(*CancelTaskParam)
-	cancelParam.Reason = fmt.Sprintf("任务(%d,%s)执行失败,%+v", task.Task.Id, task.Task.Name, err)
+	cancelParam.Reason = reason
 	if atomic.CompareAndSwapInt32(&cancelParam.IsCancel, 0, 1) {
 		close(job.Done)
 		cancelParam.CancelFunc()
