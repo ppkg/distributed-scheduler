@@ -114,7 +114,8 @@ func (s *ApplicationContext) initDefaultConfig() {
 		s.conf.SchedulerThreadCount, _ = strconv.Atoi(threadCount)
 	}
 	if s.conf.SchedulerThreadCount == 0 {
-		s.conf.SchedulerThreadCount = 10
+		// 携程池大小默认5000
+		s.conf.SchedulerThreadCount = 5000
 	}
 
 	s.conf.Raft.NodeId = os.Getenv("NODE_ID")

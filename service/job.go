@@ -166,6 +166,7 @@ func (s *jobService) taskCallback(ctx context.Context, job *dto.JobInfo, task *m
 
 		// 创建新task并放入调度器执行
 		newTask := &model.Task{
+			JobId:    task.JobId,
 			Sharding: task.Sharding,
 			Name:     task.Name,
 			Input:    task.Output,
