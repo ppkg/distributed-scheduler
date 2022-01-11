@@ -3,6 +3,7 @@ package util
 import (
 	"context"
 	"distributed-scheduler/dto"
+	"distributed-scheduler/model"
 	"sync/atomic"
 )
 
@@ -15,4 +16,15 @@ func CancelNotify(ctx context.Context, job *dto.JobInfo, reason string) {
 		close(job.Done)
 		cancelParam.CancelFunc()
 	}
+}
+
+func FilterTaskByPlugin(list []*model.Task, plugin string) []*model.Task {
+	var result []*model.Task
+	for _, item := range list {
+		if item.Plugin != plugin {
+			continue
+		}
+		result = append(result, item)
+	}
+	return result
 }

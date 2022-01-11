@@ -86,8 +86,10 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 
 // 构建任务
 func (s *ApplicationContext) buildTasks(ctx context.Context, jobInfo *dto.JobInfo, taskList []*dsModel.Task) []InputTask {
-	list := make([]InputTask, 0, len(taskList))
-	for _, item := range taskList {
+	pluginSet := strings.Split(jobInfo.Job.PluginSet, ",")
+	result := s.filterPendingTask(ctx, jobInfo, taskList, 0, pluginSet)
+	list := make([]InputTask, 0, len(result))
+	for _, item := range result {
 		list = append(list, InputTask{
 			Ctx:      ctx,
 			Task:     item,
@@ -95,6 +97,45 @@ func (s *ApplicationContext) buildTasks(ctx context.Context, jobInfo *dto.JobInf
 		})
 	}
 	return list
+}
+
+// 过滤出待处理任务
+func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.JobInfo, taskList []*dsModel.Task, pos int, pluginSet []string) []*dsModel.Task {
+	var result []*dsModel.Task
+	list := util.FilterTaskByPlugin(taskList, pluginSet[pos])
+	if len(list) == 0 {
+		return result
+	}
+	for _, item := range list {
+		// 递归查找
+		result = append(result, s.filterPendingTask(ctx, job, taskList, pos+1, pluginSet)...)
+
+		if item.Status != enum.FinishTaskStatus {
+			result = append(result, item)
+			continue
+		}
+		if pos == len(pluginSet)-1 {
+			continue
+		}
+
+		nextPluginTaskList := util.FilterTaskByPlugin(taskList, pluginSet[pos+1])
+		isFound := true
+		for _, nextTask := range nextPluginTaskList {
+			if nextTask.Sharding == item.Sharding {
+				isFound = true
+			}
+		}
+		if isFound {
+			continue
+		}
+		// 如果下一个插件找不到相同的分片则下一个task没有创建需要创建新的
+		newTask := s.createNewTask(ctx, job, item, pluginSet[pos+1])
+		if newTask == nil {
+			continue
+		}
+		result = append(result, newTask)
+	}
+	return result
 }
 
 // 任务执行完回调通知
@@ -141,23 +182,33 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 		}
 
 		// 创建新task并放入调度器执行
-		newTask := &dsModel.Task{
-			JobId:    task.JobId,
-			Sharding: task.Sharding,
-			Name:     task.Name,
-			Input:    task.Output,
-			Plugin:   strings.Split(job.Job.PluginSet, ",")[pos+1],
-		}
-		// 持久化新task任务
-		err = s.taskRepo.Save(s.Db, newTask)
-		if err != nil {
-			glog.Errorf("ApplicationContext/taskCallback 持久化新task失败,task:%s,err:%+v", kit.JsonEncode(newTask), err)
-			util.CancelNotify(ctx, job, fmt.Sprintf("新task(%s)持久化失败,jobId:%d,%+v", task.Name, newTask.JobId, err))
-			job.Job.Status = enum.SystemExceptionJobStatus
+		newTask := s.createNewTask(ctx, job, task, strings.Split(job.Job.PluginSet, ",")[pos+1])
+		if newTask == nil {
 			return
 		}
 		job.AppendSafeTask(newTask)
 		// 调度新的task
 		s.Scheduler.Put(job, s.buildTasks(ctx, job, []*dsModel.Task{newTask})...)
 	}
+}
+
+// 创建新task
+func (s *ApplicationContext) createNewTask(ctx context.Context, job *dto.JobInfo, task *dsModel.Task, plugin string) *dsModel.Task {
+	// 创建新task并放入调度器执行
+	newTask := &dsModel.Task{
+		JobId:    task.JobId,
+		Sharding: task.Sharding,
+		Name:     task.Name,
+		Input:    task.Output,
+		Plugin:   plugin,
+	}
+	// 持久化新task任务
+	err := s.taskRepo.Save(s.Db, newTask)
+	if err != nil {
+		glog.Errorf("ApplicationContext/createNewTask 持久化新task失败,task:%s,err:%+v", kit.JsonEncode(newTask), err)
+		util.CancelNotify(ctx, job, fmt.Sprintf("新task(%s)持久化失败,jobId:%d,%+v", task.Name, newTask.JobId, err))
+		job.Job.Status = enum.SystemExceptionJobStatus
+		return nil
+	}
+	return newTask
 }
