@@ -245,8 +245,13 @@ func (s *scheduleEngine) DispatchNotify(job *dto.JobInfo) {
 			glog.Errorf("scheduleEngine/DispatchNotify 分发job(%d,%s)通知panic:%+v", job.Job.Id, job.Job.Name, panic)
 		}
 	}()
-	pos := s.getAndIncr("systemWorkerNotify")
 	list := s.NotifyChannel.GetAll()
+	if len(list) == 0 {
+		glog.Errorf("scheduleEngine/DispatchNotify 分发job(%d,%s)通知时找不到任何worker订阅通知", job.Job.Id, job.Job.Name)
+		return
+	}
+
+	pos := s.getAndIncr("systemWorkerNotify")
 	i := pos % uint32(len(list))
 	channel := list[i]
 	channel <- job

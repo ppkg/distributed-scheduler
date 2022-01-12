@@ -81,6 +81,11 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 		glog.Errorf("ApplicationContext/StartJob 更新job状态异常,id:%d,err:%+v", jobInfo.Job.Id, err)
 		return err
 	}
+
+	// 如果是异步job并且需要通知则推送通知
+	if jobInfo.Job.IsAsync == 1 && jobInfo.Job.IsNotify == 1 {
+		s.Scheduler.DispatchNotify(jobInfo)
+	}
 	return nil
 }
 
