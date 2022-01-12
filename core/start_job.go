@@ -50,8 +50,11 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	// job状态改为进行中
 	jobInfo.Job.Status = enum.DoingJobStatus
 	_ = s.jobRepo.UpdateStatus(s.Db, jobInfo.Job)
+
 	// 构建task并移交给scheduler调度器来调度
-	s.Scheduler.Put(jobInfo, s.buildTasks(ctx, jobInfo, jobInfo.TaskList)...)
+	pluginSet := strings.Split(jobInfo.Job.PluginSet, ",")
+	taskList := s.filterPendingTask(ctx, jobInfo, jobInfo.TaskList, 0, pluginSet)
+	s.Scheduler.Put(jobInfo, s.buildTasks(ctx, jobInfo, taskList)...)
 
 	for range jobInfo.Done {
 		endTasks := jobInfo.FilterFinishEndTask()
@@ -94,10 +97,8 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 
 // 构建任务
 func (s *ApplicationContext) buildTasks(ctx context.Context, jobInfo *dto.JobInfo, taskList []*model.Task) []InputTask {
-	pluginSet := strings.Split(jobInfo.Job.PluginSet, ",")
-	result := s.filterPendingTask(ctx, jobInfo, taskList, 0, pluginSet)
-	list := make([]InputTask, 0, len(result))
-	for _, item := range result {
+	list := make([]InputTask, 0, len(taskList))
+	for _, item := range taskList {
 		list = append(list, InputTask{
 			Ctx:      ctx,
 			Task:     item,
