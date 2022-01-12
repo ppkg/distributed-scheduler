@@ -53,6 +53,10 @@ func (s *JobInfo) Reduce() (string, error) {
 	var result []interface{}
 	var err error
 	for _, task := range taskList {
+		// 如果输出结果为空则直接跳过
+		if task.Output == "" {
+			continue
+		}
 		var output interface{}
 		err = json.Unmarshal([]byte(task.Output), &output)
 		if err != nil {
@@ -65,6 +69,11 @@ func (s *JobInfo) Reduce() (string, error) {
 			result = append(result, rs)
 		}
 	}
+
+	if len(result) == 0 {
+		return "", nil
+	}
+
 	data, err := json.Marshal(result)
 	if err != nil {
 		return "", fmt.Errorf("序列化异常,data:%+v,err:%+v", result, err)
