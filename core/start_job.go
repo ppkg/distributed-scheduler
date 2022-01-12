@@ -26,7 +26,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	}
 	ctx = context.WithValue(ctx, dto.CancelTaskKey{}, cancelParam)
 	defer func() {
-		if atomic.CompareAndSwapInt32(&cancelParam.IsCancel, 0, 1) {
+		if atomic.CompareAndSwapInt32(&cancelParam.State, enum.NormalRuningState, -1) {
 			cancelParam.CancelFunc()
 		}
 	}()
@@ -59,8 +59,8 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	}
 
 	// 记录取消原因
-	switch cancelParam.IsCancel {
-	case enum.ExceptionCancel:
+	switch cancelParam.State {
+	case enum.ExceptionCancelState:
 		jobInfo.Job.Result = cancelParam.Reason
 	}
 
@@ -162,7 +162,7 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 
 		// 判断当前task是不是被取消了，如果是则直接return
 		cancelParam := ctx.Value(dto.CancelTaskKey{}).(*dto.CancelTaskParam)
-		if cancelParam.IsCancel != enum.NormalRuning {
+		if cancelParam.State != enum.NormalRuningState {
 			return
 		}
 

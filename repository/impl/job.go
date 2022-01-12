@@ -79,6 +79,16 @@ func (s jobRepositoryImpl) UpdateStatus(db *gorm.DB, data *model.Job) error {
 	return nil
 }
 
+// 更新通知状态
+func (s jobRepositoryImpl) UpdateNotifyStatus(db *gorm.DB, id int64, status int32) error {
+	err := db.Model(&model.Job{}).Where("id=?", id).Update("notify_status", status).Error
+	if err != nil {
+		glog.Errorf("jobRepositoryImpl/UpdateNotifyStatus 更新job通知状态异常,id:%d,notifyStatus:%d,err:%+v", id, status, err)
+		return err
+	}
+	return nil
+}
+
 func NewJobRepository() repository.JobRepository {
 	return jobRepositoryImpl{}
 }

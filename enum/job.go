@@ -14,9 +14,16 @@ const (
 
 const (
 	// 正常运行
-	NormalRuning int32 = 0
+	NormalRuningState int32 = 0
 	// 异常退出
-	ExceptionCancel int32 = 1
+	ExceptionCancelState int32 = 1
 	// 手动取消
-	ManualCancel int32 = 2
+	ManualCancelState int32 = 2
+)
+
+// 通知状态，0：待通知，1：通知成功，2：通知失败
+const (
+	PendingNotifyStatus int32 = 0
+	SuccessNotifyStatus int32 = 1
+	FailNotifyStatus    int32 = 2
 )

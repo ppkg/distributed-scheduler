@@ -29,6 +29,9 @@ type scheduleEngine struct {
 	schedulePool *ants.Pool
 
 	workerConns workerConnMap
+
+	// 异步通知渠道
+	NotifyChannel *workerNotifyChannel
 }
 
 func NewScheduler(thread int) *scheduleEngine {
@@ -39,6 +42,7 @@ func NewScheduler(thread int) *scheduleEngine {
 		workerConns: workerConnMap{
 			cache: make(map[string]*grpc.ClientConn),
 		},
+		NotifyChannel: NewWorkerNotifyChannel(),
 	}
 	var err error
 	engine.schedulePool, err = ants.NewPool(thread, ants.WithNonblocking(true))
@@ -232,4 +236,18 @@ func (s *scheduleEngine) run(job *dto.JobInfo, task InputTask) error {
 		return err
 	}
 	return nil
+}
+
+// 分发job通知
+func (s *scheduleEngine) DispatchNotify(job *dto.JobInfo) {
+	defer func() {
+		if panic := recover(); panic != nil {
+			glog.Errorf("scheduleEngine/DispatchNotify 分发job(%d,%s)通知panic:%+v", job.Job.Id, job.Job.Name, panic)
+		}
+	}()
+	pos := s.getAndIncr("systemWorkerNotify")
+	list := s.NotifyChannel.GetAll()
+	i := pos % uint32(len(list))
+	channel := list[i]
+	channel <- job
 }

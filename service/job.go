@@ -3,6 +3,7 @@ package service
 import (
 	"distributed-scheduler/core"
 	"distributed-scheduler/dto"
+	"distributed-scheduler/enum"
 	"distributed-scheduler/errCode"
 	"distributed-scheduler/model"
 	"distributed-scheduler/proto/job"
@@ -58,7 +59,43 @@ func (s *jobService) AsyncSubmit(stream job.JobService_AsyncSubmitServer) error 
 
 // 异步通知
 func (s *jobService) AsyncNotify(req *job.AsyncNotifyRequest, steam job.JobService_AsyncNotifyServer) error {
-	return nil
+	s.appCtx.Scheduler.NotifyChannel.RemoveAndCloseChannel(req.NodeId)
+	channel := make(chan *dto.JobInfo)
+	s.appCtx.Scheduler.NotifyChannel.RegisterChannel(req.NodeId, channel)
+
+	var err error
+	var myJob *dto.JobInfo
+	for item := range channel {
+		err = steam.Send(&job.AsyncNotifyResponse{
+			Id:     item.Job.Id,
+			Name:   item.Job.Name,
+			Type:   item.Job.Type,
+			Status: item.Job.Status,
+			Result: item.Job.Result,
+		})
+		if err == nil {
+			// 更新推送状态
+			s.jobRepo.UpdateNotifyStatus(s.appCtx.Db, item.Job.Id, enum.SuccessNotifyStatus)
+			glog.Infof("jobService/AsyncNotify 通知worker(%s)成功,jobId:%d,jobName:%s", req.NodeId, item.Job.Id, item.Job.Name)
+		}
+		// 如果异步通知失败则关闭通道并重新发送给其他channel执行
+		if err != nil {
+			s.appCtx.Scheduler.NotifyChannel.RemoveAndCloseChannel(req.NodeId)
+			myJob = item
+			break
+		}
+	}
+
+	myJob.NotifyCount++
+	// 如果重试超过5次则不再重推通知,一下推送状态
+	if myJob.NotifyCount > 5 {
+		s.jobRepo.UpdateNotifyStatus(s.appCtx.Db, myJob.Job.Id, enum.FailNotifyStatus)
+		return err
+	}
+
+	// 重新推送给其他worker通道
+	s.appCtx.Scheduler.DispatchNotify(myJob)
+	return err
 }
 
 // 同步提交job

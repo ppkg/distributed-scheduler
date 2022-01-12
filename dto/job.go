@@ -14,6 +14,8 @@ type JobInfo struct {
 	Job      *model.Job
 	TaskList []*model.Task
 	lock     sync.Mutex
+	// 通知次数
+	NotifyCount int32
 }
 
 // 初始化已完成task channel
