@@ -38,6 +38,9 @@ func (s taskRepositoryImpl) List(db *gorm.DB, params map[string]interface{}) ([]
 	if val, ok := params["jobId"]; ok {
 		db = db.Where("job_id=?", val)
 	}
+	if val, ok := params["jobIds"]; ok {
+		db = db.Where("job_id in (?)", val)
+	}
 	err := db.Find(&list).Error
 	if err != nil {
 		glog.Errorf("taskRepositoryImpl/List 查询task列表异常,参数:%s,err:%+v", kit.JsonEncode(params), err)

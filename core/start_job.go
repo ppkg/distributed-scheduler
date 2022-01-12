@@ -4,7 +4,7 @@ import (
 	"context"
 	"distributed-scheduler/dto"
 	"distributed-scheduler/enum"
-	dsModel "distributed-scheduler/model"
+	"distributed-scheduler/model"
 	"distributed-scheduler/util"
 	"fmt"
 	"strings"
@@ -85,7 +85,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 }
 
 // 构建任务
-func (s *ApplicationContext) buildTasks(ctx context.Context, jobInfo *dto.JobInfo, taskList []*dsModel.Task) []InputTask {
+func (s *ApplicationContext) buildTasks(ctx context.Context, jobInfo *dto.JobInfo, taskList []*model.Task) []InputTask {
 	pluginSet := strings.Split(jobInfo.Job.PluginSet, ",")
 	result := s.filterPendingTask(ctx, jobInfo, taskList, 0, pluginSet)
 	list := make([]InputTask, 0, len(result))
@@ -99,9 +99,9 @@ func (s *ApplicationContext) buildTasks(ctx context.Context, jobInfo *dto.JobInf
 	return list
 }
 
-// 过滤出待处理任务
-func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.JobInfo, taskList []*dsModel.Task, pos int, pluginSet []string) []*dsModel.Task {
-	var result []*dsModel.Task
+// 过滤出待处理task任务
+func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.JobInfo, taskList []*model.Task, pos int, pluginSet []string) []*model.Task {
+	var result []*model.Task
 	list := util.FilterTaskByPlugin(taskList, pluginSet[pos])
 	if len(list) == 0 {
 		return result
@@ -139,7 +139,7 @@ func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.Job
 }
 
 // 任务执行完回调通知
-func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo, task *dsModel.Task) func() {
+func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo, task *model.Task) func() {
 	return func() {
 		glog.Infof("当前任务执行结果,name:%s,id:%d,jobId:%d,status:%d(%s),nodeId:%s,plugin:%s,output:%s,input:%s", task.Name, task.Id, task.JobId, task.Status, enum.TaskStatusMap[task.Status], task.NodeId, task.Plugin, task.Output, task.Input)
 
@@ -188,14 +188,14 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 		}
 		job.AppendSafeTask(newTask)
 		// 调度新的task
-		s.Scheduler.Put(job, s.buildTasks(ctx, job, []*dsModel.Task{newTask})...)
+		s.Scheduler.Put(job, s.buildTasks(ctx, job, []*model.Task{newTask})...)
 	}
 }
 
 // 创建新task
-func (s *ApplicationContext) createNewTask(ctx context.Context, job *dto.JobInfo, task *dsModel.Task, plugin string) *dsModel.Task {
+func (s *ApplicationContext) createNewTask(ctx context.Context, job *dto.JobInfo, task *model.Task, plugin string) *model.Task {
 	// 创建新task并放入调度器执行
-	newTask := &dsModel.Task{
+	newTask := &model.Task{
 		JobId:    task.JobId,
 		Sharding: task.Sharding,
 		Name:     task.Name,
@@ -211,4 +211,69 @@ func (s *ApplicationContext) createNewTask(ctx context.Context, job *dto.JobInfo
 		return nil
 	}
 	return newTask
+}
+
+// 重启未完成的异步job
+func (s *ApplicationContext) restartUndoneAsyncJob() {
+	list, err := s.loadUndoneAsyncJob()
+	if err != nil {
+		glog.Errorf("ApplicationContext/restartUndoneAsyncJob 加载未完成异步job异常,err:%+v", err)
+		return
+	}
+	if len(list) == 0 {
+		return
+	}
+	var logSlice []string
+	for _, item := range list {
+		logSlice = append(logSlice, fmt.Sprintf("%d->%s", item.Job.Id, item.Job.Name))
+	}
+	glog.Infof("ApplicationContext/restartUndoneAsyncJob 共有%d个job重启,分别是:%s", len(list), strings.Join(logSlice, ","))
+
+	for _, item := range list {
+		err = s.StartJob(item)
+		if err != nil {
+			glog.Errorf("ApplicationContext/restartUndoneAsyncJob job(%d,%s)重启失败,err:%+v", item.Job.Id, item.Job.Name, err)
+		}
+	}
+}
+
+// 加载24小时内未完成异步工作
+func (s *ApplicationContext) loadUndoneAsyncJob() ([]*dto.JobInfo, error) {
+	endTime := time.Now()
+	startTime := endTime.Add(-24 * time.Hour)
+	jobList, err := s.jobRepo.List(s.Db, map[string]interface{}{
+		"startTime": startTime,
+		"endTime":   endTime,
+		"isSync":    1,
+		"status":    enum.SystemExceptionJobStatus,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	jobIds := make([]int64, 0, len(jobList))
+	for _, jobItem := range jobList {
+		jobIds = append(jobIds, jobItem.Id)
+	}
+
+	taskList, err := s.taskRepo.List(s.Db, map[string]interface{}{
+		"jobIds": jobIds,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	taskMap := make(map[int64][]*model.Task)
+	for _, item := range taskList {
+		taskMap[item.JobId] = append(taskMap[item.JobId], item)
+	}
+
+	list := make([]*dto.JobInfo, 0, len(jobList))
+	for _, jobItem := range jobList {
+		list = append(list, &dto.JobInfo{
+			Job:      jobItem,
+			TaskList: taskMap[jobItem.Id],
+		})
+	}
+	return list, nil
 }

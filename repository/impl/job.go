@@ -43,6 +43,18 @@ func (s jobRepositoryImpl) List(db *gorm.DB, params map[string]interface{}) ([]*
 	if val, ok := params["id"]; ok {
 		db = db.Where("id=?", val)
 	}
+	if val, ok := params["startTime"]; ok {
+		db = db.Where("create_time>=?", val)
+	}
+	if val, ok := params["endTime"]; ok {
+		db = db.Where("create_time<?", val)
+	}
+	if val, ok := params["status"]; ok {
+		db = db.Where("status=?", val)
+	}
+	if val, ok := params["isSync"]; ok {
+		db = db.Where("is_sync=?", val)
+	}
 	err := db.Find(&list).Error
 	if err != nil {
 		glog.Errorf("jobRepositoryImpl/List 查询job列表异常,参数:%s,err:%+v", kit.JsonEncode(params), err)

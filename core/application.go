@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"distributed-scheduler/enum"
 	"distributed-scheduler/repository"
 	"distributed-scheduler/repository/impl"
 	"distributed-scheduler/util"
@@ -108,12 +109,15 @@ func (s *ApplicationContext) watchRaftMaster() {
 	for isLeader := range s.raft.LeaderCh() {
 		if isLeader {
 			glog.Infof("当前raft节点(%s,%s)获取leader身份", s.conf.Raft.NodeId, s.getPeerAddr())
-
+			// 等待三秒后重新加载未完成job
+			time.Sleep(3 * time.Second)
+			s.restartUndoneAsyncJob()
 			continue
 		}
 		glog.Infof("当前raft节点(%s,%s)失去leader身份", s.conf.Raft.NodeId, s.getPeerAddr())
 		for _, job := range s.JobContainer.GetAll() {
-			util.CancelNotify(job.Ctx, job.Job, fmt.Sprintf("当前raft节点(%s,%s)失去leader身份,取消正在运行任务", s.conf.Raft.NodeId, s.getPeerAddr()))
+			util.CancelNotify(job.Ctx, job.Job, fmt.Sprintf("当前raft节点(%s,%s)失去leader身份,取消正在运行job", s.conf.Raft.NodeId, s.getPeerAddr()))
+			job.Job.Job.Status = enum.SystemExceptionJobStatus
 		}
 		s.JobContainer.RemoveAll()
 	}
