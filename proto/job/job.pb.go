@@ -24,7 +24,7 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-type SubmitRequest struct {
+type AsyncSubmitRequest struct {
 	// job名称
 	Name string `protobuf:"bytes,1,opt,name=Name,proto3" json:"Name"`
 	// job类型
@@ -32,63 +32,72 @@ type SubmitRequest struct {
 	// 插件集合
 	PluginSet []string `protobuf:"bytes,3,rep,name=PluginSet,proto3" json:"PluginSet"`
 	// job数据
-	Data                 string   `protobuf:"bytes,4,opt,name=Data,proto3" json:"Data"`
+	Data string `protobuf:"bytes,4,opt,name=Data,proto3" json:"Data"`
+	// job完成是否需要通知worker
+	IsNotify             bool     `protobuf:"varint,5,opt,name=IsNotify,proto3" json:"IsNotify"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SubmitRequest) Reset()         { *m = SubmitRequest{} }
-func (m *SubmitRequest) String() string { return proto.CompactTextString(m) }
-func (*SubmitRequest) ProtoMessage()    {}
-func (*SubmitRequest) Descriptor() ([]byte, []int) {
+func (m *AsyncSubmitRequest) Reset()         { *m = AsyncSubmitRequest{} }
+func (m *AsyncSubmitRequest) String() string { return proto.CompactTextString(m) }
+func (*AsyncSubmitRequest) ProtoMessage()    {}
+func (*AsyncSubmitRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_4f60868841c20a44, []int{0}
 }
 
-func (m *SubmitRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SubmitRequest.Unmarshal(m, b)
+func (m *AsyncSubmitRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_AsyncSubmitRequest.Unmarshal(m, b)
 }
-func (m *SubmitRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SubmitRequest.Marshal(b, m, deterministic)
+func (m *AsyncSubmitRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_AsyncSubmitRequest.Marshal(b, m, deterministic)
 }
-func (m *SubmitRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SubmitRequest.Merge(m, src)
+func (m *AsyncSubmitRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AsyncSubmitRequest.Merge(m, src)
 }
-func (m *SubmitRequest) XXX_Size() int {
-	return xxx_messageInfo_SubmitRequest.Size(m)
+func (m *AsyncSubmitRequest) XXX_Size() int {
+	return xxx_messageInfo_AsyncSubmitRequest.Size(m)
 }
-func (m *SubmitRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_SubmitRequest.DiscardUnknown(m)
+func (m *AsyncSubmitRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_AsyncSubmitRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_SubmitRequest proto.InternalMessageInfo
+var xxx_messageInfo_AsyncSubmitRequest proto.InternalMessageInfo
 
-func (m *SubmitRequest) GetName() string {
+func (m *AsyncSubmitRequest) GetName() string {
 	if m != nil {
 		return m.Name
 	}
 	return ""
 }
 
-func (m *SubmitRequest) GetType() string {
+func (m *AsyncSubmitRequest) GetType() string {
 	if m != nil {
 		return m.Type
 	}
 	return ""
 }
 
-func (m *SubmitRequest) GetPluginSet() []string {
+func (m *AsyncSubmitRequest) GetPluginSet() []string {
 	if m != nil {
 		return m.PluginSet
 	}
 	return nil
 }
 
-func (m *SubmitRequest) GetData() string {
+func (m *AsyncSubmitRequest) GetData() string {
 	if m != nil {
 		return m.Data
 	}
 	return ""
+}
+
+func (m *AsyncSubmitRequest) GetIsNotify() bool {
+	if m != nil {
+		return m.IsNotify
+	}
+	return false
 }
 
 type AsyncSubmitResponse struct {
@@ -131,6 +140,188 @@ func (m *AsyncSubmitResponse) GetId() int64 {
 	return 0
 }
 
+type AsyncNotifyRequest struct {
+	// 节点ID
+	NodeId               string   `protobuf:"bytes,1,opt,name=NodeId,proto3" json:"NodeId"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *AsyncNotifyRequest) Reset()         { *m = AsyncNotifyRequest{} }
+func (m *AsyncNotifyRequest) String() string { return proto.CompactTextString(m) }
+func (*AsyncNotifyRequest) ProtoMessage()    {}
+func (*AsyncNotifyRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_4f60868841c20a44, []int{2}
+}
+
+func (m *AsyncNotifyRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_AsyncNotifyRequest.Unmarshal(m, b)
+}
+func (m *AsyncNotifyRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_AsyncNotifyRequest.Marshal(b, m, deterministic)
+}
+func (m *AsyncNotifyRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AsyncNotifyRequest.Merge(m, src)
+}
+func (m *AsyncNotifyRequest) XXX_Size() int {
+	return xxx_messageInfo_AsyncNotifyRequest.Size(m)
+}
+func (m *AsyncNotifyRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_AsyncNotifyRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_AsyncNotifyRequest proto.InternalMessageInfo
+
+func (m *AsyncNotifyRequest) GetNodeId() string {
+	if m != nil {
+		return m.NodeId
+	}
+	return ""
+}
+
+type AsyncNotifyResponse struct {
+	Id int64 `protobuf:"varint,1,opt,name=Id,proto3" json:"Id"`
+	// job名称
+	Name string `protobuf:"bytes,2,opt,name=Name,proto3" json:"Name"`
+	// job类型
+	Type string `protobuf:"bytes,3,opt,name=Type,proto3" json:"Type"`
+	// job状态,2：执行完成，3：取消执行，4：系统异常，5：task推送失败，6：运行超时，7：业务处理异常
+	Status int32 `protobuf:"varint,4,opt,name=status,proto3" json:"status"`
+	// 结果输出
+	Result               string   `protobuf:"bytes,5,opt,name=result,proto3" json:"result"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *AsyncNotifyResponse) Reset()         { *m = AsyncNotifyResponse{} }
+func (m *AsyncNotifyResponse) String() string { return proto.CompactTextString(m) }
+func (*AsyncNotifyResponse) ProtoMessage()    {}
+func (*AsyncNotifyResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_4f60868841c20a44, []int{3}
+}
+
+func (m *AsyncNotifyResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_AsyncNotifyResponse.Unmarshal(m, b)
+}
+func (m *AsyncNotifyResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_AsyncNotifyResponse.Marshal(b, m, deterministic)
+}
+func (m *AsyncNotifyResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AsyncNotifyResponse.Merge(m, src)
+}
+func (m *AsyncNotifyResponse) XXX_Size() int {
+	return xxx_messageInfo_AsyncNotifyResponse.Size(m)
+}
+func (m *AsyncNotifyResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_AsyncNotifyResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_AsyncNotifyResponse proto.InternalMessageInfo
+
+func (m *AsyncNotifyResponse) GetId() int64 {
+	if m != nil {
+		return m.Id
+	}
+	return 0
+}
+
+func (m *AsyncNotifyResponse) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *AsyncNotifyResponse) GetType() string {
+	if m != nil {
+		return m.Type
+	}
+	return ""
+}
+
+func (m *AsyncNotifyResponse) GetStatus() int32 {
+	if m != nil {
+		return m.Status
+	}
+	return 0
+}
+
+func (m *AsyncNotifyResponse) GetResult() string {
+	if m != nil {
+		return m.Result
+	}
+	return ""
+}
+
+type SyncSubmitRequest struct {
+	// job名称
+	Name string `protobuf:"bytes,1,opt,name=Name,proto3" json:"Name"`
+	// job类型
+	Type string `protobuf:"bytes,2,opt,name=Type,proto3" json:"Type"`
+	// 插件集合
+	PluginSet []string `protobuf:"bytes,3,rep,name=PluginSet,proto3" json:"PluginSet"`
+	// job数据
+	Data                 string   `protobuf:"bytes,4,opt,name=Data,proto3" json:"Data"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SyncSubmitRequest) Reset()         { *m = SyncSubmitRequest{} }
+func (m *SyncSubmitRequest) String() string { return proto.CompactTextString(m) }
+func (*SyncSubmitRequest) ProtoMessage()    {}
+func (*SyncSubmitRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_4f60868841c20a44, []int{4}
+}
+
+func (m *SyncSubmitRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SyncSubmitRequest.Unmarshal(m, b)
+}
+func (m *SyncSubmitRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SyncSubmitRequest.Marshal(b, m, deterministic)
+}
+func (m *SyncSubmitRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SyncSubmitRequest.Merge(m, src)
+}
+func (m *SyncSubmitRequest) XXX_Size() int {
+	return xxx_messageInfo_SyncSubmitRequest.Size(m)
+}
+func (m *SyncSubmitRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SyncSubmitRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SyncSubmitRequest proto.InternalMessageInfo
+
+func (m *SyncSubmitRequest) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *SyncSubmitRequest) GetType() string {
+	if m != nil {
+		return m.Type
+	}
+	return ""
+}
+
+func (m *SyncSubmitRequest) GetPluginSet() []string {
+	if m != nil {
+		return m.PluginSet
+	}
+	return nil
+}
+
+func (m *SyncSubmitRequest) GetData() string {
+	if m != nil {
+		return m.Data
+	}
+	return ""
+}
+
 type SyncSubmitResponse struct {
 	// job ID
 	Id int64 `protobuf:"varint,1,opt,name=Id,proto3" json:"Id"`
@@ -147,7 +338,7 @@ func (m *SyncSubmitResponse) Reset()         { *m = SyncSubmitResponse{} }
 func (m *SyncSubmitResponse) String() string { return proto.CompactTextString(m) }
 func (*SyncSubmitResponse) ProtoMessage()    {}
 func (*SyncSubmitResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_4f60868841c20a44, []int{2}
+	return fileDescriptor_4f60868841c20a44, []int{5}
 }
 
 func (m *SyncSubmitResponse) XXX_Unmarshal(b []byte) error {
@@ -190,31 +381,40 @@ func (m *SyncSubmitResponse) GetResult() string {
 }
 
 func init() {
-	proto.RegisterType((*SubmitRequest)(nil), "job.SubmitRequest")
+	proto.RegisterType((*AsyncSubmitRequest)(nil), "job.AsyncSubmitRequest")
 	proto.RegisterType((*AsyncSubmitResponse)(nil), "job.AsyncSubmitResponse")
+	proto.RegisterType((*AsyncNotifyRequest)(nil), "job.AsyncNotifyRequest")
+	proto.RegisterType((*AsyncNotifyResponse)(nil), "job.AsyncNotifyResponse")
+	proto.RegisterType((*SyncSubmitRequest)(nil), "job.SyncSubmitRequest")
 	proto.RegisterType((*SyncSubmitResponse)(nil), "job.SyncSubmitResponse")
 }
 
 func init() { proto.RegisterFile("proto/job/job.proto", fileDescriptor_4f60868841c20a44) }
 
 var fileDescriptor_4f60868841c20a44 = []byte{
-	// 244 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x90, 0x41, 0x4b, 0x03, 0x31,
-	0x10, 0x85, 0xd9, 0x4d, 0x2d, 0xec, 0x88, 0x1e, 0xa6, 0xa0, 0x41, 0x3c, 0x94, 0x05, 0x61, 0x4f,
-	0x15, 0xf4, 0x28, 0x1e, 0x04, 0x2f, 0xf5, 0x20, 0x92, 0xf4, 0x0f, 0x24, 0xed, 0x20, 0x29, 0xed,
-	0x66, 0x6d, 0x12, 0xa1, 0xff, 0xc0, 0x9f, 0x2d, 0x93, 0xad, 0xa8, 0xb0, 0xe8, 0x21, 0x30, 0xef,
-	0x23, 0x8f, 0xf7, 0x78, 0x30, 0xe9, 0x76, 0x3e, 0xfa, 0xeb, 0xb5, 0xb7, 0xfc, 0x66, 0x59, 0xa1,
-	0x58, 0x7b, 0x5b, 0x3b, 0x38, 0xd1, 0xc9, 0x6e, 0x5d, 0x54, 0xf4, 0x96, 0x28, 0x44, 0x44, 0x18,
-	0x3d, 0x9b, 0x2d, 0xc9, 0x62, 0x5a, 0x34, 0x95, 0xca, 0x37, 0xb3, 0xc5, 0xbe, 0x23, 0x59, 0xf6,
-	0x8c, 0x6f, 0xbc, 0x84, 0xea, 0x65, 0x93, 0x5e, 0x5d, 0xab, 0x29, 0x4a, 0x31, 0x15, 0x4d, 0xa5,
-	0xbe, 0x01, 0x3b, 0x1e, 0x4d, 0x34, 0x72, 0xd4, 0x3b, 0xf8, 0xae, 0xaf, 0x60, 0xf2, 0x10, 0xf6,
-	0xed, 0xf2, 0x2b, 0x2f, 0x74, 0xbe, 0x0d, 0x84, 0xa7, 0x50, 0xce, 0x57, 0x39, 0x4e, 0xa8, 0x72,
-	0xbe, 0xaa, 0x17, 0x80, 0xfa, 0xdf, 0x5f, 0x78, 0x06, 0xe3, 0x10, 0x4d, 0x4c, 0x21, 0x97, 0x3a,
-	0x52, 0x07, 0xc5, 0x5c, 0x51, 0x48, 0x1b, 0xee, 0xc4, 0xd1, 0x07, 0x75, 0xf3, 0x51, 0x00, 0x3c,
-	0x79, 0xab, 0x69, 0xf7, 0xee, 0x96, 0x84, 0xf7, 0x70, 0xfc, 0xa3, 0x0b, 0xe2, 0x8c, 0x67, 0xf9,
-	0x35, 0xc4, 0x85, 0xcc, 0x6c, 0xa0, 0x71, 0x53, 0xe0, 0x1d, 0x80, 0xfe, 0xdb, 0x7d, 0xde, 0xb3,
-	0x01, 0xb3, 0x1d, 0xe7, 0xf9, 0x6f, 0x3f, 0x03, 0x00, 0x00, 0xff, 0xff, 0x69, 0x84, 0xa5, 0xd0,
-	0x95, 0x01, 0x00, 0x00,
+	// 343 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xbc, 0x93, 0xcf, 0x6a, 0xfa, 0x40,
+	0x10, 0xc7, 0xd9, 0x44, 0xc5, 0xcc, 0x0f, 0x7e, 0xd0, 0x11, 0x74, 0x91, 0x1e, 0x64, 0xa1, 0x90,
+	0x43, 0xb1, 0xa5, 0x7d, 0x80, 0xd2, 0xd2, 0x8b, 0x3d, 0x48, 0xd9, 0xf8, 0x02, 0x89, 0x6e, 0x4b,
+	0x44, 0x5d, 0xeb, 0x6e, 0x0a, 0x1e, 0xfa, 0x02, 0x7d, 0xbf, 0xbe, 0x4f, 0xd9, 0x3f, 0xc6, 0xa4,
+	0x11, 0x7a, 0xeb, 0x41, 0x98, 0xef, 0x38, 0x33, 0x7c, 0x3f, 0x33, 0x1b, 0xe8, 0x6d, 0x77, 0x52,
+	0xcb, 0xab, 0xa5, 0xcc, 0xcc, 0x6f, 0x6c, 0x15, 0x86, 0x4b, 0x99, 0xb1, 0x4f, 0x02, 0x78, 0xaf,
+	0xf6, 0x9b, 0x79, 0x52, 0x64, 0xeb, 0x5c, 0x73, 0xf1, 0x56, 0x08, 0xa5, 0x11, 0xa1, 0x35, 0x4d,
+	0xd7, 0x82, 0x92, 0x11, 0x89, 0x23, 0x6e, 0x63, 0x93, 0x9b, 0xed, 0xb7, 0x82, 0x06, 0x2e, 0x67,
+	0x62, 0x3c, 0x87, 0xe8, 0x79, 0x55, 0xbc, 0xe6, 0x9b, 0x44, 0x68, 0x1a, 0x8e, 0xc2, 0x38, 0xe2,
+	0xc7, 0x84, 0xe9, 0x78, 0x4c, 0x75, 0x4a, 0x5b, 0xae, 0xc3, 0xc4, 0x38, 0x84, 0xee, 0x44, 0x4d,
+	0xa5, 0xce, 0x5f, 0xf6, 0xb4, 0x3d, 0x22, 0x71, 0x97, 0x97, 0x9a, 0x5d, 0x40, 0xaf, 0xe6, 0x45,
+	0x6d, 0xe5, 0x46, 0x09, 0xfc, 0x0f, 0xc1, 0x64, 0x61, 0xad, 0x84, 0x3c, 0x98, 0x2c, 0xd8, 0xa5,
+	0xb7, 0xec, 0xba, 0x0e, 0x96, 0xfb, 0xd0, 0x99, 0xca, 0x85, 0xf0, 0x95, 0x11, 0xf7, 0x8a, 0x7d,
+	0xf8, 0xa1, 0x87, 0xea, 0xd3, 0x43, 0x4b, 0xe2, 0xe0, 0x04, 0x71, 0x58, 0x21, 0xee, 0x43, 0x47,
+	0xe9, 0x54, 0x17, 0xca, 0x52, 0xb5, 0xb9, 0x57, 0x26, 0xbf, 0x13, 0xaa, 0x58, 0x69, 0x4b, 0x15,
+	0x71, 0xaf, 0xd8, 0x1a, 0xce, 0x92, 0xbf, 0x5b, 0x2f, 0x9b, 0x01, 0x26, 0xbf, 0x6e, 0xb0, 0x02,
+	0x11, 0xfc, 0x84, 0xe0, 0x0e, 0xc2, 0x21, 0x7b, 0x75, 0xf3, 0x45, 0x00, 0x9e, 0x64, 0x96, 0x88,
+	0xdd, 0x7b, 0x3e, 0x17, 0xf8, 0x00, 0xff, 0x2a, 0x77, 0xc2, 0xc1, 0xd8, 0x3c, 0xaa, 0xe6, 0x2b,
+	0x1a, 0xd2, 0xe6, 0x1f, 0xce, 0x50, 0x4c, 0xca, 0x19, 0xee, 0x2c, 0xd5, 0x19, 0xb5, 0xb3, 0x56,
+	0x67, 0xd4, 0x2f, 0x78, 0x4d, 0xf0, 0x0e, 0xe0, 0x08, 0x8b, 0x7d, 0x5b, 0xd9, 0x58, 0xf6, 0x70,
+	0xd0, 0xc8, 0x1f, 0x4c, 0x64, 0x1d, 0xfb, 0x25, 0xdc, 0x7e, 0x07, 0x00, 0x00, 0xff, 0xff, 0x4a,
+	0x93, 0x59, 0xfc, 0x20, 0x03, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -231,6 +431,8 @@ const _ = grpc.SupportPackageIsVersion4
 type JobServiceClient interface {
 	// 异步提交job
 	AsyncSubmit(ctx context.Context, opts ...grpc.CallOption) (JobService_AsyncSubmitClient, error)
+	// 异步通知
+	AsyncNotify(ctx context.Context, in *AsyncNotifyRequest, opts ...grpc.CallOption) (JobService_AsyncNotifyClient, error)
 	// 同步提交job
 	SyncSubmit(ctx context.Context, opts ...grpc.CallOption) (JobService_SyncSubmitClient, error)
 }
@@ -253,7 +455,7 @@ func (c *jobServiceClient) AsyncSubmit(ctx context.Context, opts ...grpc.CallOpt
 }
 
 type JobService_AsyncSubmitClient interface {
-	Send(*SubmitRequest) error
+	Send(*AsyncSubmitRequest) error
 	CloseAndRecv() (*AsyncSubmitResponse, error)
 	grpc.ClientStream
 }
@@ -262,7 +464,7 @@ type jobServiceAsyncSubmitClient struct {
 	grpc.ClientStream
 }
 
-func (x *jobServiceAsyncSubmitClient) Send(m *SubmitRequest) error {
+func (x *jobServiceAsyncSubmitClient) Send(m *AsyncSubmitRequest) error {
 	return x.ClientStream.SendMsg(m)
 }
 
@@ -277,8 +479,40 @@ func (x *jobServiceAsyncSubmitClient) CloseAndRecv() (*AsyncSubmitResponse, erro
 	return m, nil
 }
 
+func (c *jobServiceClient) AsyncNotify(ctx context.Context, in *AsyncNotifyRequest, opts ...grpc.CallOption) (JobService_AsyncNotifyClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_JobService_serviceDesc.Streams[1], "/job.JobService/AsyncNotify", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &jobServiceAsyncNotifyClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type JobService_AsyncNotifyClient interface {
+	Recv() (*AsyncNotifyResponse, error)
+	grpc.ClientStream
+}
+
+type jobServiceAsyncNotifyClient struct {
+	grpc.ClientStream
+}
+
+func (x *jobServiceAsyncNotifyClient) Recv() (*AsyncNotifyResponse, error) {
+	m := new(AsyncNotifyResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *jobServiceClient) SyncSubmit(ctx context.Context, opts ...grpc.CallOption) (JobService_SyncSubmitClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_JobService_serviceDesc.Streams[1], "/job.JobService/SyncSubmit", opts...)
+	stream, err := c.cc.NewStream(ctx, &_JobService_serviceDesc.Streams[2], "/job.JobService/SyncSubmit", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +521,7 @@ func (c *jobServiceClient) SyncSubmit(ctx context.Context, opts ...grpc.CallOpti
 }
 
 type JobService_SyncSubmitClient interface {
-	Send(*SubmitRequest) error
+	Send(*SyncSubmitRequest) error
 	CloseAndRecv() (*SyncSubmitResponse, error)
 	grpc.ClientStream
 }
@@ -296,7 +530,7 @@ type jobServiceSyncSubmitClient struct {
 	grpc.ClientStream
 }
 
-func (x *jobServiceSyncSubmitClient) Send(m *SubmitRequest) error {
+func (x *jobServiceSyncSubmitClient) Send(m *SyncSubmitRequest) error {
 	return x.ClientStream.SendMsg(m)
 }
 
@@ -315,6 +549,8 @@ func (x *jobServiceSyncSubmitClient) CloseAndRecv() (*SyncSubmitResponse, error)
 type JobServiceServer interface {
 	// 异步提交job
 	AsyncSubmit(JobService_AsyncSubmitServer) error
+	// 异步通知
+	AsyncNotify(*AsyncNotifyRequest, JobService_AsyncNotifyServer) error
 	// 同步提交job
 	SyncSubmit(JobService_SyncSubmitServer) error
 }
@@ -325,6 +561,9 @@ type UnimplementedJobServiceServer struct {
 
 func (*UnimplementedJobServiceServer) AsyncSubmit(srv JobService_AsyncSubmitServer) error {
 	return status.Errorf(codes.Unimplemented, "method AsyncSubmit not implemented")
+}
+func (*UnimplementedJobServiceServer) AsyncNotify(req *AsyncNotifyRequest, srv JobService_AsyncNotifyServer) error {
+	return status.Errorf(codes.Unimplemented, "method AsyncNotify not implemented")
 }
 func (*UnimplementedJobServiceServer) SyncSubmit(srv JobService_SyncSubmitServer) error {
 	return status.Errorf(codes.Unimplemented, "method SyncSubmit not implemented")
@@ -340,7 +579,7 @@ func _JobService_AsyncSubmit_Handler(srv interface{}, stream grpc.ServerStream) 
 
 type JobService_AsyncSubmitServer interface {
 	SendAndClose(*AsyncSubmitResponse) error
-	Recv() (*SubmitRequest, error)
+	Recv() (*AsyncSubmitRequest, error)
 	grpc.ServerStream
 }
 
@@ -352,12 +591,33 @@ func (x *jobServiceAsyncSubmitServer) SendAndClose(m *AsyncSubmitResponse) error
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *jobServiceAsyncSubmitServer) Recv() (*SubmitRequest, error) {
-	m := new(SubmitRequest)
+func (x *jobServiceAsyncSubmitServer) Recv() (*AsyncSubmitRequest, error) {
+	m := new(AsyncSubmitRequest)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
+}
+
+func _JobService_AsyncNotify_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(AsyncNotifyRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(JobServiceServer).AsyncNotify(m, &jobServiceAsyncNotifyServer{stream})
+}
+
+type JobService_AsyncNotifyServer interface {
+	Send(*AsyncNotifyResponse) error
+	grpc.ServerStream
+}
+
+type jobServiceAsyncNotifyServer struct {
+	grpc.ServerStream
+}
+
+func (x *jobServiceAsyncNotifyServer) Send(m *AsyncNotifyResponse) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _JobService_SyncSubmit_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -366,7 +626,7 @@ func _JobService_SyncSubmit_Handler(srv interface{}, stream grpc.ServerStream) e
 
 type JobService_SyncSubmitServer interface {
 	SendAndClose(*SyncSubmitResponse) error
-	Recv() (*SubmitRequest, error)
+	Recv() (*SyncSubmitRequest, error)
 	grpc.ServerStream
 }
 
@@ -378,8 +638,8 @@ func (x *jobServiceSyncSubmitServer) SendAndClose(m *SyncSubmitResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *jobServiceSyncSubmitServer) Recv() (*SubmitRequest, error) {
-	m := new(SubmitRequest)
+func (x *jobServiceSyncSubmitServer) Recv() (*SyncSubmitRequest, error) {
+	m := new(SyncSubmitRequest)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -395,6 +655,11 @@ var _JobService_serviceDesc = grpc.ServiceDesc{
 			StreamName:    "AsyncSubmit",
 			Handler:       _JobService_AsyncSubmit_Handler,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "AsyncNotify",
+			Handler:       _JobService_AsyncNotify_Handler,
+			ServerStreams: true,
 		},
 		{
 			StreamName:    "SyncSubmit",

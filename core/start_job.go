@@ -244,11 +244,14 @@ func (s *ApplicationContext) loadUndoneAsyncJob() ([]*dto.JobInfo, error) {
 	jobList, err := s.jobRepo.List(s.Db, map[string]interface{}{
 		"startTime": startTime,
 		"endTime":   endTime,
-		"isSync":    1,
+		"isAsync":   1,
 		"status":    enum.SystemExceptionJobStatus,
 	})
 	if err != nil {
 		return nil, err
+	}
+	if len(jobList) == 0 {
+		return nil, nil
 	}
 
 	jobIds := make([]int64, 0, len(jobList))

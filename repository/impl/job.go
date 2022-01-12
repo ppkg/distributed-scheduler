@@ -52,8 +52,8 @@ func (s jobRepositoryImpl) List(db *gorm.DB, params map[string]interface{}) ([]*
 	if val, ok := params["status"]; ok {
 		db = db.Where("status=?", val)
 	}
-	if val, ok := params["isSync"]; ok {
-		db = db.Where("is_sync=?", val)
+	if val, ok := params["isAsync"]; ok {
+		db = db.Where("is_async=?", val)
 	}
 	err := db.Find(&list).Error
 	if err != nil {

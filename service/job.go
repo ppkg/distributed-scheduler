@@ -23,18 +23,52 @@ type jobService struct {
 }
 
 // 异步提交job
-func (s *jobService) AsyncSubmit(_ job.JobService_AsyncSubmitServer) error {
-	panic("not implemented") // TODO: Implement
+func (s *jobService) AsyncSubmit(stream job.JobService_AsyncSubmitServer) error {
+	jobInfo, err := s.receiveAsyncJobStream(stream)
+	if err != nil {
+		glog.Errorf("jobService/AsyncSubmit 接收job数据异常,err:%+v", err)
+		return err
+	}
+
+	err = s.persistence(jobInfo)
+	if err != nil {
+		glog.Errorf("jobService/AsyncSubmit 持久化job数据异常,err:%+v", err)
+		return err
+	}
+
+	// 重新加载最新job信息
+	jobInfo, err = s.reloadJobInfo(jobInfo)
+	if err != nil {
+		glog.Errorf("jobService/AsyncSubmit 重新加载最新job信息异常,err:%+v", err)
+		return err
+	}
+
+	err = s.appCtx.StartJob(jobInfo)
+	if err != nil {
+		glog.Errorf("jobService/AsyncSubmit 执行job运算异常,id:%d,err:%+v", jobInfo.Job.Id, err)
+		return err
+	}
+
+	return stream.SendAndClose(
+		&job.AsyncSubmitResponse{
+			Id: jobInfo.Job.Id,
+		},
+	)
+}
+
+// 异步通知
+func (s *jobService) AsyncNotify(req *job.AsyncNotifyRequest, steam job.JobService_AsyncNotifyServer) error {
+	return nil
 }
 
 // 同步提交job
 func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
-	jobInfo, err := s.receiveJobStream(stream)
+	jobInfo, err := s.receiveSyncJobStream(stream)
 	if err != nil {
 		glog.Errorf("jobService/SyncSubmit 接收job数据异常,err:%+v", err)
 		return err
 	}
-	jobInfo.Job.IsAsync = 1
+	jobInfo.Job.IsAsync = 0
 
 	err = s.persistence(jobInfo)
 	if err != nil {
@@ -95,8 +129,8 @@ func (s *jobService) persistence(jobInfo *dto.JobInfo) error {
 	})
 }
 
-// 接收job信息
-func (s *jobService) receiveJobStream(stream job.JobService_SyncSubmitServer) (*dto.JobInfo, error) {
+// 接收同步job流
+func (s *jobService) receiveSyncJobStream(stream job.JobService_SyncSubmitServer) (*dto.JobInfo, error) {
 	jobInfo := &dto.JobInfo{}
 	var firstPlugin string
 	var sharding int32 = 0
@@ -117,6 +151,49 @@ func (s *jobService) receiveJobStream(stream job.JobService_SyncSubmitServer) (*
 				Name:      r.Name,
 				Type:      r.Type,
 				PluginSet: strings.Join(r.PluginSet, ","),
+			}
+			firstPlugin = r.PluginSet[0]
+		}
+		jobInfo.AppendSafeTask(&model.Task{
+			Sharding: sharding,
+			Name:     fmt.Sprintf("%s-%d", jobInfo.Job.Name, sharding),
+			Input:    r.Data,
+			Plugin:   firstPlugin,
+		})
+		sharding++
+	}
+
+	jobInfo.Job.Size = int32(len(jobInfo.TaskList))
+
+	return jobInfo, nil
+}
+
+// 接收异步job流
+func (s *jobService) receiveAsyncJobStream(stream job.JobService_AsyncSubmitServer) (*dto.JobInfo, error) {
+	jobInfo := &dto.JobInfo{}
+	var firstPlugin string
+	var sharding int32 = 0
+	for {
+		r, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return jobInfo, err
+		}
+		if len(r.PluginSet) == 0 {
+			return jobInfo, errCode.ToGrpcErr(errCode.ErrPluginSetEmpty)
+		}
+		// 初始化job数据
+		if jobInfo.Job == nil {
+			jobInfo.Job = &model.Job{
+				Name:      r.Name,
+				Type:      r.Type,
+				PluginSet: strings.Join(r.PluginSet, ","),
+				IsAsync:   1,
+			}
+			if r.IsNotify {
+				jobInfo.Job.IsNotify = 1
 			}
 			firstPlugin = r.PluginSet[0]
 		}

@@ -5,12 +5,14 @@ package job;
 //------------------Job模块------------------------------------------
 service JobService {
   // 异步提交job
-  rpc AsyncSubmit(stream SubmitRequest) returns (AsyncSubmitResponse);
+  rpc AsyncSubmit(stream AsyncSubmitRequest) returns (AsyncSubmitResponse);
+  // 异步通知
+  rpc AsyncNotify(AsyncNotifyRequest) returns (stream AsyncNotifyResponse);
   // 同步提交job
-  rpc SyncSubmit(stream SubmitRequest) returns (SyncSubmitResponse);
+  rpc SyncSubmit(stream SyncSubmitRequest) returns (SyncSubmitResponse);
 }
 
-message SubmitRequest {
+message AsyncSubmitRequest {
   // job名称
   string Name = 1;
   // job类型
@@ -19,11 +21,41 @@ message SubmitRequest {
   repeated string PluginSet = 3;
   // job数据
   string Data = 4;
+  // job完成是否需要通知worker
+  bool IsNotify = 5;
 }
 
 message AsyncSubmitResponse {
   // job ID需要记录
   int64 Id = 1;
+}
+
+message AsyncNotifyRequest {
+  // 节点ID
+  string NodeId = 1;
+}
+
+message AsyncNotifyResponse {
+  int64 Id = 1;
+  // job名称
+  string Name = 2;
+  // job类型
+  string Type = 3;
+  // job状态,2：执行完成，3：取消执行，4：系统异常，5：task推送失败，6：运行超时，7：业务处理异常
+  int32 status = 4;
+  // 结果输出
+  string result = 5;
+}
+
+message SyncSubmitRequest {
+  // job名称
+  string Name = 1;
+  // job类型
+  string Type = 2;
+  // 插件集合
+  repeated string PluginSet = 3;
+  // job数据
+  string Data = 4;
 }
 
 message SyncSubmitResponse {
