@@ -47,6 +47,9 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	})
 	defer s.JobContainer.Remove(jobInfo.Job.Id)
 
+	// job状态改为进行中
+	jobInfo.Job.Status = enum.DoingJobStatus
+	_ = s.jobRepo.UpdateStatus(s.Db, jobInfo.Job)
 	// 构建task并移交给scheduler调度器来调度
 	s.Scheduler.Put(jobInfo, s.buildTasks(ctx, jobInfo, jobInfo.TaskList)...)
 
@@ -106,15 +109,17 @@ func (s *ApplicationContext) buildTasks(ctx context.Context, jobInfo *dto.JobInf
 
 // 过滤出待处理task任务
 func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.JobInfo, taskList []*model.Task, pos int, pluginSet []string) []*model.Task {
+	if pos >= len(pluginSet) {
+		return nil
+	}
 	var result []*model.Task
 	list := util.FilterTaskByPlugin(taskList, pluginSet[pos])
 	if len(list) == 0 {
 		return result
 	}
+	// 递归查找
+	result = append(result, s.filterPendingTask(ctx, job, taskList, pos+1, pluginSet)...)
 	for _, item := range list {
-		// 递归查找
-		result = append(result, s.filterPendingTask(ctx, job, taskList, pos+1, pluginSet)...)
-
 		if item.Status != enum.FinishTaskStatus {
 			result = append(result, item)
 			continue
@@ -250,7 +255,7 @@ func (s *ApplicationContext) loadUndoneAsyncJob() ([]*dto.JobInfo, error) {
 		"startTime": startTime,
 		"endTime":   endTime,
 		"isAsync":   1,
-		"status":    enum.SystemExceptionJobStatus,
+		"inStatus":  []int32{enum.PendingJobStatus, enum.DoingJobStatus, enum.SystemExceptionJobStatus},
 	})
 	if err != nil {
 		return nil, err
@@ -261,6 +266,10 @@ func (s *ApplicationContext) loadUndoneAsyncJob() ([]*dto.JobInfo, error) {
 
 	jobIds := make([]int64, 0, len(jobList))
 	for _, jobItem := range jobList {
+		_, ok := s.JobContainer.Get(jobItem.Id)
+		if ok {
+			continue
+		}
 		jobIds = append(jobIds, jobItem.Id)
 	}
 

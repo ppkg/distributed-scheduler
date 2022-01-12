@@ -215,8 +215,11 @@ func (s *ApplicationContext) Run() error {
 
 	// 定时检查worker心跳状态
 	go s.cronCheckHeartbeatStatus()
-	// 监控raft身份并及时处理
-	go s.watchRaftMaster()
+	// 由于nacos服务发现有延迟导致raft选举有点延后，需要延迟15秒后再执行监控raft身份变更
+	time.AfterFunc(15*time.Second, func() {
+		// 监控raft身份并及时处理
+		go s.watchRaftMaster()
+	})
 
 	// 初始化grpc服务
 	err = s.doServe()
