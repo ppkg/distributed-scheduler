@@ -256,7 +256,7 @@ func (s *ApplicationContext) loadUndoneAsyncJob() ([]*dto.JobInfo, error) {
 		"startTime": startTime,
 		"endTime":   endTime,
 		"isAsync":   1,
-		"inStatus":  []int32{enum.PendingJobStatus, enum.DoingJobStatus, enum.SystemExceptionJobStatus},
+		"inStatus":  []int32{enum.PendingJobStatus, enum.DoingJobStatus, enum.SystemExceptionJobStatus, enum.PushFailJobStatus},
 	})
 	if err != nil {
 		return nil, err
