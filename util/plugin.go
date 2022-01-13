@@ -10,3 +10,12 @@ func FindPluginPos(pluginSet string, plugin string) int {
 	}
 	return -1
 }
+
+func IsSupportPlugin(pluginSet []string, plugin string) bool {
+	for _, item := range pluginSet {
+		if item == plugin {
+			return true
+		}
+	}
+	return false
+}

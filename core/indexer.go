@@ -5,13 +5,13 @@ import (
 )
 
 // worker缓存组件
-type WorkerIndexer struct {
+type workerIndexer struct {
 	lock    sync.RWMutex
 	plugins map[string]nodeIdSet
 	workers workerMap
 }
 
-func (s *WorkerIndexer) AddWorker(worker WorkerNode) {
+func (s *workerIndexer) AddWorker(worker WorkerNode) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	s.workers[worker.NodeId] = worker
@@ -26,7 +26,7 @@ func (s *WorkerIndexer) AddWorker(worker WorkerNode) {
 	}
 }
 
-func (s *WorkerIndexer) RemoveWorker(worker WorkerNode) {
+func (s *workerIndexer) RemoveWorker(worker WorkerNode) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if _, ok := s.workers[worker.NodeId]; !ok {
@@ -40,7 +40,7 @@ func (s *WorkerIndexer) RemoveWorker(worker WorkerNode) {
 	}
 }
 
-func (s *WorkerIndexer) GetPluginWorker(pluginKey string) []WorkerNode {
+func (s *workerIndexer) GetPluginWorker(pluginKey string) []WorkerNode {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	nodeIds, ok := s.plugins[pluginKey]
@@ -54,7 +54,7 @@ func (s *WorkerIndexer) GetPluginWorker(pluginKey string) []WorkerNode {
 	return list
 }
 
-func (s *WorkerIndexer) GetWorker(nodeId string) (WorkerNode, bool) {
+func (s *workerIndexer) GetWorker(nodeId string) (WorkerNode, bool) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	node, ok := s.workers[nodeId]
@@ -73,8 +73,8 @@ type workerMap map[string]WorkerNode
 
 type nodeIdSet map[string]struct{}
 
-func NewWorkerIndexer() *WorkerIndexer {
-	return &WorkerIndexer{
+func NewWorkerIndexer() *workerIndexer {
+	return &workerIndexer{
 		plugins: make(map[string]nodeIdSet),
 		workers: make(workerMap),
 	}

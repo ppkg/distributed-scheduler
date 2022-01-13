@@ -31,11 +31,14 @@ func (s *nodeService) HeartBeat(ctx context.Context, req *node.HeartBeatRequest)
 		return nil, errCode.ToGrpcErr(errCode.ErrNonMasterNode)
 	}
 
-	s.appCtx.UpdateHeartbeat(core.WorkerNode{
+	err := s.appCtx.UpdateHeartbeat(core.WorkerNode{
 		NodeId:    req.NodeInfo.NodeId,
 		Endpoint:  req.NodeInfo.Endpoint,
 		PluginSet: req.PluginSet,
 	})
+	if err != nil {
+		return nil, err
+	}
 	return &emptypb.Empty{}, nil
 }
 

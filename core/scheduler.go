@@ -20,41 +20,100 @@ import (
 // 调度引擎
 type scheduleEngine struct {
 	// worker节点缓存器
-	WorkerIndexer *WorkerIndexer
+	workerIndexer *workerIndexer
 	lock          sync.RWMutex
 	roundRobinMap map[string]*safeUint32
 
-	// 调度器线程数
-	threadCount  int
-	schedulePool *ants.Pool
+	// worker调度器线程数
+	workerThreadCount int
+	// worker线程池
+	workerPools *workerPoolMap
+	// worker连接维护
+	workerConns *workerConnMap
 
-	workerConns workerConnMap
+	// task任务队列
+	taskQueue chan func(worker WorkerNode)
 
 	// 异步通知渠道
 	NotifyChannel *workerNotifyChannel
 }
 
-func NewScheduler(thread int) *scheduleEngine {
+func NewScheduler(workerThread int) *scheduleEngine {
 	engine := &scheduleEngine{
-		threadCount:   thread,
-		WorkerIndexer: NewWorkerIndexer(),
-		roundRobinMap: make(map[string]*safeUint32),
-		workerConns: workerConnMap{
-			cache: make(map[string]*grpc.ClientConn),
-		},
-		NotifyChannel: NewWorkerNotifyChannel(),
+		workerThreadCount: workerThread,
+		workerPools:       NewWorkerPools(),
+		workerIndexer:     NewWorkerIndexer(),
+		roundRobinMap:     make(map[string]*safeUint32),
+		workerConns:       NewWorkerConns(),
+		NotifyChannel:     NewWorkerNotifyChannel(),
+		taskQueue:         make(chan func(worker WorkerNode), 100000000),
 	}
-	var err error
-	engine.schedulePool, err = ants.NewPool(thread, ants.WithNonblocking(true))
-	if err != nil {
-		glog.Errorf("ScheduleEngine/NewScheduler 创建调度器异常,err:%+v", err)
-	}
-
 	return engine
 }
 
+func (s *scheduleEngine) AddWorker(worker WorkerNode) error {
+	s.workerIndexer.AddWorker(worker)
+	err := s.workerPools.Put(worker, s.workerThreadCount)
+	if err != nil {
+		glog.Errorf("scheduleEngine/AddWorker %v", err)
+		return err
+	}
+	go s.startWork(worker)
+	return nil
+}
+
+func (s *scheduleEngine) startWork(worker WorkerNode) {
+	pool, closeCh, err := s.workerPools.Get(worker)
+	if err != nil {
+		glog.Errorf("scheduleEngine/startWork %v", err)
+	}
+	glog.Infof("scheduleEngine/startWork worker节点(%s,%s)开始工作", worker.NodeId, worker.Endpoint)
+loop:
+	for {
+		select {
+		case <-closeCh:
+			break loop
+		case fn := <-s.taskQueue:
+			err = pool.Submit(func() {
+				fn(worker)
+			})
+			if err == nil {
+				continue
+			}
+			// 如果task提交给worker线程池失败则重新入列
+			glog.Errorf("scheduleEngine/startWork worker节点(%s,%s)往线程池提交task失败,err:%+v", worker.NodeId, worker.Endpoint, err)
+			s.taskQueue <- fn
+		}
+	}
+	glog.Infof("scheduleEngine/startWork worker节点(%s,%s)停止工作", worker.NodeId, worker.Endpoint)
+}
+
+func (s *scheduleEngine) RemoveWorker(worker WorkerNode) {
+	s.workerIndexer.RemoveWorker(worker)
+	s.workerPools.Remove(worker)
+}
+
+// 更新worker索引
+func (s *scheduleEngine) UpdateWorkerIndex(worker WorkerNode) {
+	s.workerIndexer.RemoveWorker(worker)
+	s.workerIndexer.AddWorker(worker)
+}
+
 // 推送任务
-func (s *scheduleEngine) processTask(task *model.Task) error {
+func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error {
+	tryCount := 3
+	// 优先给自己worker执行,不过要先判断自己是否支持当前插件运行
+	if util.IsSupportPlugin(worker.PluginSet, task.Plugin) {
+		err := s.pushTask(worker, task)
+		if err == nil {
+			return nil
+		}
+		glog.Errorf("ScheduleEngine/processTask 优先给自己worker推送异常,worker:%s,taskId:%d,err:%+v", kit.JsonEncode(worker), task.Id, err)
+	} else {
+		tryCount = 4
+	}
+
+	// 自己worker执行失败则交给其他worker来执行
 	workers, err := s.predicateWorker(task.Plugin)
 	if err != nil {
 		glog.Errorf("ScheduleEngine/processTask 预选worker节点异常,taskId:%d,err:%+v", task.Id, err)
@@ -62,7 +121,7 @@ func (s *scheduleEngine) processTask(task *model.Task) error {
 	}
 
 	// 推送任务,如果推送失败则重推
-	for i := 0; i < 5; i++ {
+	for i := 0; i < tryCount; i++ {
 		myWorker := s.preferWorker(task.Plugin, workers)
 		err = s.pushTask(myWorker, task)
 		if err == nil {
@@ -113,7 +172,7 @@ func (s *scheduleEngine) preferWorker(plugin string, list []WorkerNode) WorkerNo
 
 // 预选worker工作节点
 func (s *scheduleEngine) predicateWorker(plugin string) ([]WorkerNode, error) {
-	workers := s.WorkerIndexer.GetPluginWorker(plugin)
+	workers := s.workerIndexer.GetPluginWorker(plugin)
 	if len(workers) == 0 {
 		return nil, fmt.Errorf("没有支持插件(%s)的worker可调度", plugin)
 	}
@@ -129,6 +188,12 @@ type InputTask struct {
 type workerConnMap struct {
 	cache map[string]*grpc.ClientConn
 	lock  sync.RWMutex
+}
+
+func NewWorkerConns() *workerConnMap {
+	return &workerConnMap{
+		cache: make(map[string]*grpc.ClientConn),
+	}
 }
 
 // 获取worker客户端连接
@@ -188,19 +253,14 @@ func (s *scheduleEngine) Put(job *dto.JobInfo, tasks ...InputTask) {
 	if len(tasks) == 0 {
 		return
 	}
-	var err error
 	for _, item := range tasks {
-		err = s.run(job, item)
-		if err != nil {
-			util.CancelNotify(item.Ctx, job, "调度器线程池已满，无法调度task")
-			job.Job.Status = enum.SystemExceptionJobStatus
-		}
+		s.taskQueue <- s.buildQueueFunc(job, item)
 	}
 }
 
-// 执行调度任务
-func (s *scheduleEngine) run(job *dto.JobInfo, task InputTask) error {
-	err := s.schedulePool.Submit(func() {
+// 构建task队列入参
+func (s *scheduleEngine) buildQueueFunc(job *dto.JobInfo, task InputTask) func(worker WorkerNode) {
+	return func(worker WorkerNode) {
 		defer func() {
 			if panic := recover(); panic != nil {
 				errMsg := fmt.Sprintf("运行task(%d,%s) panic:%+v,trace:%s", task.Task.Id, task.Task.Name, panic, util.PanicTrace(10))
@@ -218,7 +278,7 @@ func (s *scheduleEngine) run(job *dto.JobInfo, task InputTask) error {
 			glog.Warningf("退出当前任务(%d,%s)，其他任务执行失败:%s", task.Task.Id, task.Task.Name, cancelParam.Reason)
 			return
 		default:
-			err := s.processTask(task.Task)
+			err := s.processTask(worker, task.Task)
 			if err != nil {
 				// 推送失败
 				errMsg := fmt.Sprintf("推送task(%d,%s)失败,err:%+v", task.Task.Id, task.Task.Name, err)
@@ -230,12 +290,7 @@ func (s *scheduleEngine) run(job *dto.JobInfo, task InputTask) error {
 			}
 			task.Callback()
 		}
-	})
-	if err != nil {
-		glog.Errorf("当前线程池满了,容量:%d,已使用:%d,剩余:%d,taskId:%d,err:%+v", s.schedulePool.Cap(), s.schedulePool.Running(), s.schedulePool.Free(), task.Task.Id, err)
-		return err
 	}
-	return nil
 }
 
 // 分发job通知
@@ -255,4 +310,53 @@ func (s *scheduleEngine) DispatchNotify(job *dto.JobInfo) {
 	i := pos % uint32(len(list))
 	channel := list[i]
 	channel <- job
+}
+
+type workerPoolMap struct {
+	pools         map[string]*ants.Pool
+	closeChannels map[string]chan int
+	lock          sync.RWMutex
+}
+
+func NewWorkerPools() *workerPoolMap {
+	return &workerPoolMap{
+		pools:         make(map[string]*ants.Pool),
+		closeChannels: make(map[string]chan int),
+	}
+}
+
+func (s *workerPoolMap) Get(worker WorkerNode) (*ants.Pool, <-chan int, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	val, ok := s.pools[worker.NodeId]
+	if ok {
+		return val, s.closeChannels[worker.NodeId], nil
+	}
+	return nil, nil, fmt.Errorf("工作节点worker(%s,%s)线程池未创建", worker.NodeId, worker.Endpoint)
+}
+
+func (s *workerPoolMap) Put(worker WorkerNode, size int) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	pool, err := ants.NewPool(size)
+	if err != nil {
+		return fmt.Errorf("工作节点worker(%s,%s)实例化线程池失败,err:%+v", worker.NodeId, worker.Endpoint, err)
+	}
+	s.pools[worker.NodeId] = pool
+	s.closeChannels[worker.NodeId] = make(chan int)
+	return nil
+}
+
+func (s *workerPoolMap) Remove(worker WorkerNode) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	pool, ok := s.pools[worker.NodeId]
+	if !ok {
+		return
+	}
+	delete(s.pools, worker.NodeId)
+	pool.Release()
+	ch := s.closeChannels[worker.NodeId]
+	close(ch)
+	delete(s.closeChannels, worker.NodeId)
 }

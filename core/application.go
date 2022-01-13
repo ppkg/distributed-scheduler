@@ -72,7 +72,7 @@ func (s *ApplicationContext) cronCheckHeartbeatStatus() {
 			if now.Sub(item.AccessTime) < 3*time.Second {
 				continue
 			}
-			s.Scheduler.WorkerIndexer.RemoveWorker(item.WorkerNode)
+			s.Scheduler.RemoveWorker(item.WorkerNode)
 			s.heartbeatKeeper.Remove(item.NodeId)
 			glog.Infof("ApplicationContext/checkHeartbeatStatus 心跳断开worker节点(%v,%v)被移除", item.NodeId, item.Endpoint)
 		}
@@ -80,13 +80,17 @@ func (s *ApplicationContext) cronCheckHeartbeatStatus() {
 }
 
 // 更新心跳数据
-func (s *ApplicationContext) UpdateHeartbeat(worker WorkerNode) {
+func (s *ApplicationContext) UpdateHeartbeat(worker WorkerNode) error {
 	oldWorker, ok := s.heartbeatKeeper.Get(worker.NodeId)
+	var err error
 	if !ok {
-		s.Scheduler.WorkerIndexer.AddWorker(worker)
+		err = s.Scheduler.AddWorker(worker)
+		if err != nil {
+			return err
+		}
 		s.heartbeatKeeper.Put(worker)
 		glog.Infof("ApplicationContext/checkHeartbeatStatus 新增worker节点(%s,%s),支持插件:%v", worker.NodeId, worker.Endpoint, worker.PluginSet)
-		return
+		return nil
 	}
 	trans := cmp.Transformer("Sort", func(in []string) []string {
 		out := append([]string(nil), in...)
@@ -95,11 +99,11 @@ func (s *ApplicationContext) UpdateHeartbeat(worker WorkerNode) {
 	})
 	// 如果worker节点支持插件集有变动时需要更新索引
 	if !cmp.Equal(worker.PluginSet, oldWorker.PluginSet, trans) {
-		s.Scheduler.WorkerIndexer.RemoveWorker(oldWorker.WorkerNode)
-		s.Scheduler.WorkerIndexer.AddWorker(worker)
+		s.Scheduler.UpdateWorkerIndex(worker)
 	}
 
 	oldWorker.AccessTime = time.Now()
+	return nil
 }
 
 // 监控raft master节点
