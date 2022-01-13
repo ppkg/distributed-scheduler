@@ -40,6 +40,15 @@ func (s *workerNotifyChannel) RemoveAndCloseChannel(nodeId string) {
 	close(channel)
 }
 
+func (s *workerNotifyChannel) RemoveAll() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	for k, ch := range s.data {
+		delete(s.data, k)
+		close(ch)
+	}
+}
+
 func (s *workerNotifyChannel) GetAll() []chan<- *dto.JobInfo {
 	s.lock.RLock()
 	defer s.lock.RUnlock()

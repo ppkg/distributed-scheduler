@@ -122,6 +122,7 @@ func (s *ApplicationContext) watchRaftMaster() {
 			job.Job.Job.Status = enum.SystemExceptionJobStatus
 		}
 		s.JobContainer.RemoveAll()
+		s.Scheduler.NotifyChannel.RemoveAll()
 	}
 }
 
