@@ -16,13 +16,13 @@ func NewWorkerNotifyChannel() *workerNotifyChannel {
 	}
 }
 
-func (s *workerNotifyChannel) RegisterChannel(nodeId string, channel chan *dto.JobInfo) {
+func (s *workerNotifyChannel) RegisterChannel(nodeId string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.data[nodeId] = channel
+	s.data[nodeId] = make(chan *dto.JobInfo)
 }
 
-func (s *workerNotifyChannel) GetChannel(nodeId string) (chan *dto.JobInfo, bool) {
+func (s *workerNotifyChannel) GetChannel(nodeId string) (<-chan *dto.JobInfo, bool) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	val, ok := s.data[nodeId]
@@ -40,10 +40,10 @@ func (s *workerNotifyChannel) RemoveAndCloseChannel(nodeId string) {
 	close(channel)
 }
 
-func (s *workerNotifyChannel) GetAll() []chan *dto.JobInfo {
+func (s *workerNotifyChannel) GetAll() []chan<- *dto.JobInfo {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-	list := make([]chan *dto.JobInfo, 0, len(s.data))
+	list := make([]chan<- *dto.JobInfo, 0, len(s.data))
 	for _, item := range s.data {
 		list = append(list, item)
 	}
