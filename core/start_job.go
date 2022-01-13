@@ -49,11 +49,12 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 
 	// job状态改为进行中
 	jobInfo.Job.Status = enum.DoingJobStatus
+	jobInfo.Job.Result = ""
 	_ = s.jobRepo.UpdateStatus(s.Db, jobInfo.Job)
 
 	// 构建task并移交给scheduler调度器来调度
 	pluginSet := strings.Split(jobInfo.Job.PluginSet, ",")
-	taskList := s.filterPendingTask(ctx, jobInfo, jobInfo.TaskList, 0, pluginSet)
+	taskList := s.filterPendingTask(ctx, jobInfo, 0, pluginSet)
 	s.Scheduler.Put(jobInfo, s.buildTasks(ctx, jobInfo, taskList)...)
 
 	for range jobInfo.Done {
@@ -109,17 +110,17 @@ func (s *ApplicationContext) buildTasks(ctx context.Context, jobInfo *dto.JobInf
 }
 
 // 过滤出待处理task任务
-func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.JobInfo, taskList []*model.Task, pos int, pluginSet []string) []*model.Task {
+func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.JobInfo, pos int, pluginSet []string) []*model.Task {
 	if pos >= len(pluginSet) {
 		return nil
 	}
 	var result []*model.Task
-	list := util.FilterTaskByPlugin(taskList, pluginSet[pos])
+	list := util.FilterTaskByPlugin(job.TaskList, pluginSet[pos])
 	if len(list) == 0 {
 		return result
 	}
 	// 递归查找
-	result = append(result, s.filterPendingTask(ctx, job, taskList, pos+1, pluginSet)...)
+	result = append(result, s.filterPendingTask(ctx, job, pos+1, pluginSet)...)
 	for _, item := range list {
 		if item.Status != enum.FinishTaskStatus {
 			result = append(result, item)
@@ -129,11 +130,12 @@ func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.Job
 			continue
 		}
 
-		nextPluginTaskList := util.FilterTaskByPlugin(taskList, pluginSet[pos+1])
-		isFound := true
+		nextPluginTaskList := util.FilterTaskByPlugin(job.TaskList, pluginSet[pos+1])
+		isFound := false
 		for _, nextTask := range nextPluginTaskList {
 			if nextTask.Sharding == item.Sharding {
 				isFound = true
+				break
 			}
 		}
 		if isFound {
