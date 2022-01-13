@@ -44,11 +44,7 @@ func (s *jobService) AsyncSubmit(stream job.JobService_AsyncSubmitServer) error 
 		return err
 	}
 
-	err = s.appCtx.StartJob(jobInfo)
-	if err != nil {
-		glog.Errorf("jobService/AsyncSubmit 执行job运算异常,id:%d,err:%+v", jobInfo.Job.Id, err)
-		return err
-	}
+	go s.appCtx.StartJob(jobInfo)
 
 	return stream.SendAndClose(
 		&job.AsyncSubmitResponse{
@@ -60,7 +56,9 @@ func (s *jobService) AsyncSubmit(stream job.JobService_AsyncSubmitServer) error 
 // 异步通知
 func (s *jobService) AsyncNotify(req *job.AsyncNotifyRequest, steam job.JobService_AsyncNotifyServer) error {
 	if _, ok := s.appCtx.Scheduler.NotifyChannel.GetChannel(req.NodeId); ok {
-		return fmt.Errorf("节点(%s)已注册订阅，不可用重复订阅", req.NodeId)
+		err := fmt.Errorf("节点(%s)已注册订阅，不可用重复订阅", req.NodeId)
+		glog.Error(err)
+		return err
 	}
 	s.appCtx.Scheduler.NotifyChannel.RegisterChannel(req.NodeId)
 	channel, _ := s.appCtx.Scheduler.NotifyChannel.GetChannel(req.NodeId)
@@ -83,6 +81,7 @@ func (s *jobService) AsyncNotify(req *job.AsyncNotifyRequest, steam job.JobServi
 		}
 		// 如果异步通知失败则关闭通道并重新发送给其他channel执行
 		myJob = item
+		glog.Errorf("jobService/AsyncNotify 通知worker(%s)失败,jobId:%d,jobName:%s,err:%+v", req.NodeId, item.Job.Id, item.Job.Name, err)
 		break
 	}
 
