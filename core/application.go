@@ -218,8 +218,8 @@ func (s *ApplicationContext) Run() error {
 
 	// 定时检查worker心跳状态
 	go s.cronCheckHeartbeatStatus()
-	// 由于nacos服务发现有延迟导致raft选举有点延后，需要延迟30秒后再执行监控raft身份变更
-	time.AfterFunc(30*time.Second, func() {
+	// 由于nacos服务发现有延迟导致raft选举有点延后，需要延迟3三分钟后再执行监控raft身份变更及重新加载由于服务器奔溃导致出错的job
+	time.AfterFunc(3*time.Minute, func() {
 		// 监控raft身份并及时处理
 		go s.watchRaftMaster()
 	})

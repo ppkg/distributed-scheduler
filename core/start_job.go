@@ -64,6 +64,12 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 			break
 		}
 	}
+	if cancelParam.State==enum.NormalRuningState&&jobInfo.Job.Status!=enum.FinishJobStatus {
+		endTasks := jobInfo.FilterFinishEndTask()
+		if jobInfo.Job.Size == int32(len(endTasks)) {
+			jobInfo.Job.Status = enum.FinishJobStatus
+		}
+	}
 
 	// 记录取消原因
 	switch cancelParam.State {
