@@ -112,13 +112,11 @@ func (s *ApplicationContext) UpdateHeartbeat(worker WorkerNode) error {
 func (s *ApplicationContext) watchRaftMaster() {
 	for isLeader := range s.raft.LeaderCh() {
 		if isLeader {
-			glog.Infof("当前raft节点(%s,%s)获取leader身份", s.conf.Raft.NodeId, s.getPeerAddr())
-			// 等待三秒后重新加载未完成job
-			time.Sleep(3 * time.Second)
+			glog.Infof("ApplicationContext/watchRaftMaster 当前raft节点(%s,%s)获取leader身份", s.conf.Raft.NodeId, s.getPeerAddr())
 			s.restartUndoneAsyncJob()
 			continue
 		}
-		glog.Infof("当前raft节点(%s,%s)失去leader身份", s.conf.Raft.NodeId, s.getPeerAddr())
+		glog.Infof("ApplicationContext/watchRaftMaster 当前raft节点(%s,%s)失去leader身份", s.conf.Raft.NodeId, s.getPeerAddr())
 		for _, job := range s.JobContainer.GetAll() {
 			util.CancelNotify(job.Ctx, job.Job, fmt.Sprintf("当前raft节点(%s,%s)失去leader身份,取消正在运行job", s.conf.Raft.NodeId, s.getPeerAddr()))
 			job.Job.Job.Status = enum.SystemExceptionJobStatus
@@ -147,8 +145,8 @@ func (s *ApplicationContext) initDefaultConfig() {
 		s.conf.SchedulerThreadCount, _ = strconv.Atoi(threadCount)
 	}
 	if s.conf.SchedulerThreadCount == 0 {
-		// 携程池大小默认5000
-		s.conf.SchedulerThreadCount = 5000
+		// worker协程池大小默认1000
+		s.conf.SchedulerThreadCount = 1000
 	}
 
 	s.conf.Raft.NodeId = os.Getenv("NODE_ID")
@@ -219,8 +217,8 @@ func (s *ApplicationContext) Run() error {
 
 	// 定时检查worker心跳状态
 	go s.cronCheckHeartbeatStatus()
-	// 由于nacos服务发现有延迟导致raft选举有点延后，需要延迟15秒后再执行监控raft身份变更
-	time.AfterFunc(15*time.Second, func() {
+	// 由于nacos服务发现有延迟导致raft选举有点延后，需要延迟30秒后再执行监控raft身份变更
+	time.AfterFunc(30*time.Second, func() {
 		// 监控raft身份并及时处理
 		go s.watchRaftMaster()
 	})
