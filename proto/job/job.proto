@@ -8,7 +8,7 @@ service JobService {
   rpc AsyncSubmit(stream AsyncSubmitRequest) returns (AsyncSubmitResponse);
   // 异步通知
   rpc AsyncNotify(AsyncNotifyRequest) returns (stream AsyncNotifyResponse);
-  // 同步提交job
+  // 同步提交job(当调度器挂掉会导致job处理中断，谨用)
   rpc SyncSubmit(stream SyncSubmitRequest) returns (SyncSubmitResponse);
 }
 
