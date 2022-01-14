@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"distributed-scheduler/dto"
 	"distributed-scheduler/enum"
 	"distributed-scheduler/repository"
 	"distributed-scheduler/repository/impl"
@@ -472,9 +473,9 @@ func (s *ApplicationContext) IsMasterNode() bool {
 }
 
 // 获取主节点信息
-func (s *ApplicationContext) GetMasterNode() NodeInfo {
+func (s *ApplicationContext) GetMasterNode() dto.NodeInfo {
 	leaderServer := s.raft.Leader()
-	node := NodeInfo{}
+	node := dto.NodeInfo{}
 	serverList := s.raft.GetConfiguration().Configuration().Servers
 	for _, item := range serverList {
 		if strings.HasSuffix(string(item.Address), string(leaderServer)) {
