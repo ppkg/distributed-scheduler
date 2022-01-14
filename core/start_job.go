@@ -41,11 +41,11 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	defer timeout.Stop()
 
 	// 添加job容器中并管理
-	s.JobContainer.Put(jobInfo.Job.Id, &RunningJobItem{
+	s.jobContainer.Put(jobInfo.Job.Id, &RunningJobItem{
 		Ctx: ctx,
 		Job: jobInfo,
 	})
-	defer s.JobContainer.Remove(jobInfo.Job.Id)
+	defer s.jobContainer.Remove(jobInfo.Job.Id)
 
 	// job状态改为进行中
 	jobInfo.Job.Status = enum.DoingJobStatus
@@ -275,7 +275,7 @@ func (s *ApplicationContext) loadUndoneAsyncJob() ([]*dto.JobInfo, error) {
 
 	jobIds := make([]int64, 0, len(jobList))
 	for _, jobItem := range jobList {
-		_, ok := s.JobContainer.Get(jobItem.Id)
+		_, ok := s.jobContainer.Get(jobItem.Id)
 		if ok {
 			continue
 		}

@@ -43,7 +43,7 @@ type ApplicationContext struct {
 	heartbeatKeeper heartbeatMap
 	Db              *gorm.DB
 	Scheduler       *scheduleEngine
-	JobContainer    *runningJobContainer
+	jobContainer    *runningJobContainer
 	jobRepo         repository.JobRepository
 	taskRepo        repository.TaskRepository
 }
@@ -117,11 +117,11 @@ func (s *ApplicationContext) watchRaftMaster() {
 			continue
 		}
 		glog.Infof("ApplicationContext/watchRaftMaster 当前raft节点(%s,%s)失去leader身份", s.conf.Raft.NodeId, s.getPeerAddr())
-		for _, job := range s.JobContainer.GetAll() {
+		for _, job := range s.jobContainer.GetAll() {
 			util.CancelNotify(job.Ctx, job.Job, fmt.Sprintf("当前raft节点(%s,%s)失去leader身份,取消正在运行job", s.conf.Raft.NodeId, s.getPeerAddr()))
 			job.Job.Job.Status = enum.SystemExceptionJobStatus
 		}
-		s.JobContainer.RemoveAll()
+		s.jobContainer.RemoveAll()
 		s.Scheduler.NotifyChannel.RemoveAll()
 	}
 }
@@ -186,7 +186,7 @@ func (s *ApplicationContext) Run() error {
 	// 初始化调度器引擎
 	s.Scheduler = NewScheduler(s.conf.SchedulerThreadCount)
 	// 初始化job容器
-	s.JobContainer = NewJobContainer()
+	s.jobContainer = NewJobContainer()
 
 	// 注册服务(服务发现)
 	err := s.initNacos()
