@@ -64,7 +64,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 			break
 		}
 	}
-	if cancelParam.State==enum.NormalRuningState&&jobInfo.Job.Status!=enum.FinishJobStatus {
+	if cancelParam.State == enum.NormalRuningState && jobInfo.Job.Status != enum.FinishJobStatus {
 		endTasks := jobInfo.FilterFinishEndTask()
 		if jobInfo.Job.Size == int32(len(endTasks)) {
 			jobInfo.Job.Status = enum.FinishJobStatus
@@ -249,10 +249,7 @@ func (s *ApplicationContext) restartUndoneAsyncJob() {
 	glog.Infof("ApplicationContext/restartUndoneAsyncJob 共有%d个job重启,分别是:%s", len(list), strings.Join(logSlice, ","))
 
 	for _, item := range list {
-		err = s.StartJob(item)
-		if err != nil {
-			glog.Errorf("ApplicationContext/restartUndoneAsyncJob job(%d,%s)重启失败,err:%+v", item.Job.Id, item.Job.Name, err)
-		}
+		go s.StartJob(item)
 	}
 }
 

@@ -25,39 +25,39 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-type GetMasterResponse struct {
+type GetLeaderResponse struct {
 	NodeInfo             *NodeInfo `protobuf:"bytes,1,opt,name=NodeInfo,proto3" json:"NodeInfo"`
 	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
 	XXX_unrecognized     []byte    `json:"-"`
 	XXX_sizecache        int32     `json:"-"`
 }
 
-func (m *GetMasterResponse) Reset()         { *m = GetMasterResponse{} }
-func (m *GetMasterResponse) String() string { return proto.CompactTextString(m) }
-func (*GetMasterResponse) ProtoMessage()    {}
-func (*GetMasterResponse) Descriptor() ([]byte, []int) {
+func (m *GetLeaderResponse) Reset()         { *m = GetLeaderResponse{} }
+func (m *GetLeaderResponse) String() string { return proto.CompactTextString(m) }
+func (*GetLeaderResponse) ProtoMessage()    {}
+func (*GetLeaderResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2b558ce09c246314, []int{0}
 }
 
-func (m *GetMasterResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_GetMasterResponse.Unmarshal(m, b)
+func (m *GetLeaderResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetLeaderResponse.Unmarshal(m, b)
 }
-func (m *GetMasterResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_GetMasterResponse.Marshal(b, m, deterministic)
+func (m *GetLeaderResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetLeaderResponse.Marshal(b, m, deterministic)
 }
-func (m *GetMasterResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetMasterResponse.Merge(m, src)
+func (m *GetLeaderResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetLeaderResponse.Merge(m, src)
 }
-func (m *GetMasterResponse) XXX_Size() int {
-	return xxx_messageInfo_GetMasterResponse.Size(m)
+func (m *GetLeaderResponse) XXX_Size() int {
+	return xxx_messageInfo_GetLeaderResponse.Size(m)
 }
-func (m *GetMasterResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetMasterResponse.DiscardUnknown(m)
+func (m *GetLeaderResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetLeaderResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_GetMasterResponse proto.InternalMessageInfo
+var xxx_messageInfo_GetLeaderResponse proto.InternalMessageInfo
 
-func (m *GetMasterResponse) GetNodeInfo() *NodeInfo {
+func (m *GetLeaderResponse) GetNodeInfo() *NodeInfo {
 	if m != nil {
 		return m.NodeInfo
 	}
@@ -113,80 +113,28 @@ func (m *NodeInfo) GetNodeId() string {
 	return ""
 }
 
-type HeartBeatRequest struct {
-	NodeInfo *NodeInfo `protobuf:"bytes,1,opt,name=NodeInfo,proto3" json:"NodeInfo"`
-	// worker节点所有支持的插件
-	PluginSet            []string `protobuf:"bytes,2,rep,name=PluginSet,proto3" json:"PluginSet"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *HeartBeatRequest) Reset()         { *m = HeartBeatRequest{} }
-func (m *HeartBeatRequest) String() string { return proto.CompactTextString(m) }
-func (*HeartBeatRequest) ProtoMessage()    {}
-func (*HeartBeatRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2b558ce09c246314, []int{2}
-}
-
-func (m *HeartBeatRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_HeartBeatRequest.Unmarshal(m, b)
-}
-func (m *HeartBeatRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_HeartBeatRequest.Marshal(b, m, deterministic)
-}
-func (m *HeartBeatRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HeartBeatRequest.Merge(m, src)
-}
-func (m *HeartBeatRequest) XXX_Size() int {
-	return xxx_messageInfo_HeartBeatRequest.Size(m)
-}
-func (m *HeartBeatRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_HeartBeatRequest.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_HeartBeatRequest proto.InternalMessageInfo
-
-func (m *HeartBeatRequest) GetNodeInfo() *NodeInfo {
-	if m != nil {
-		return m.NodeInfo
-	}
-	return nil
-}
-
-func (m *HeartBeatRequest) GetPluginSet() []string {
-	if m != nil {
-		return m.PluginSet
-	}
-	return nil
-}
-
 func init() {
-	proto.RegisterType((*GetMasterResponse)(nil), "node.GetMasterResponse")
+	proto.RegisterType((*GetLeaderResponse)(nil), "node.GetLeaderResponse")
 	proto.RegisterType((*NodeInfo)(nil), "node.NodeInfo")
-	proto.RegisterType((*HeartBeatRequest)(nil), "node.HeartBeatRequest")
 }
 
 func init() { proto.RegisterFile("proto/node/node.proto", fileDescriptor_2b558ce09c246314) }
 
 var fileDescriptor_2b558ce09c246314 = []byte{
-	// 253 bytes of a gzipped FileDescriptorProto
+	// 193 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x2d, 0x28, 0xca, 0x2f,
 	0xc9, 0xd7, 0xcf, 0xcb, 0x4f, 0x49, 0x05, 0x13, 0x7a, 0x60, 0xbe, 0x10, 0x0b, 0x88, 0x2d, 0x25,
 	0x9d, 0x9e, 0x9f, 0x9f, 0x9e, 0x93, 0xaa, 0x0f, 0x16, 0x4b, 0x2a, 0x4d, 0xd3, 0x4f, 0xcd, 0x2d,
-	0x28, 0xa9, 0x84, 0x28, 0x51, 0xb2, 0xe7, 0x12, 0x74, 0x4f, 0x2d, 0xf1, 0x4d, 0x2c, 0x2e, 0x49,
+	0x28, 0xa9, 0x84, 0x28, 0x51, 0xb2, 0xe7, 0x12, 0x74, 0x4f, 0x2d, 0xf1, 0x49, 0x4d, 0x4c, 0x49,
 	0x2d, 0x0a, 0x4a, 0x2d, 0x2e, 0xc8, 0xcf, 0x2b, 0x4e, 0x15, 0xd2, 0xe2, 0xe2, 0xf0, 0xcb, 0x4f,
 	0x49, 0xf5, 0xcc, 0x4b, 0xcb, 0x97, 0x60, 0x54, 0x60, 0xd4, 0xe0, 0x36, 0xe2, 0xd3, 0x03, 0x1b,
 	0x0b, 0x13, 0x0d, 0x82, 0xcb, 0x2b, 0xd9, 0x21, 0xd4, 0x0a, 0x49, 0x71, 0x71, 0xb8, 0xe6, 0xa5,
 	0x14, 0xe4, 0x67, 0xe6, 0x95, 0x80, 0xf5, 0x71, 0x06, 0xc1, 0xf9, 0x42, 0x62, 0x5c, 0x6c, 0x60,
-	0x75, 0x29, 0x12, 0x4c, 0x60, 0x19, 0x28, 0x4f, 0x29, 0x86, 0x4b, 0xc0, 0x23, 0x35, 0xb1, 0xa8,
-	0xc4, 0x29, 0x35, 0xb1, 0x24, 0x28, 0xb5, 0xb0, 0x34, 0xb5, 0xb8, 0x84, 0x14, 0xfb, 0x85, 0x64,
-	0xb8, 0x38, 0x03, 0x72, 0x4a, 0xd3, 0x33, 0xf3, 0x82, 0x53, 0x4b, 0x24, 0x98, 0x14, 0x98, 0x35,
-	0x38, 0x83, 0x10, 0x02, 0x46, 0x1d, 0x8c, 0x5c, 0xdc, 0x20, 0xa5, 0xc1, 0xa9, 0x45, 0x65, 0x99,
-	0xc9, 0xa9, 0x42, 0x36, 0x5c, 0x9c, 0x70, 0xef, 0x0a, 0x89, 0xe9, 0x41, 0x42, 0x46, 0x0f, 0x16,
-	0x32, 0x7a, 0xae, 0xa0, 0x90, 0x91, 0x12, 0x87, 0x58, 0x86, 0x19, 0x2e, 0xd6, 0x5c, 0x9c, 0x70,
-	0xb7, 0x0a, 0x89, 0x41, 0x54, 0xa1, 0x3b, 0x5e, 0x0a, 0x87, 0xa9, 0x49, 0x6c, 0x60, 0xbe, 0x31,
-	0x20, 0x00, 0x00, 0xff, 0xff, 0x5c, 0xb9, 0x8f, 0x6a, 0xac, 0x01, 0x00, 0x00,
+	0x75, 0x29, 0x12, 0x4c, 0x60, 0x19, 0x28, 0xcf, 0xc8, 0x9b, 0x8b, 0x1b, 0xc4, 0x0a, 0x4e, 0x2d,
+	0x2a, 0xcb, 0x4c, 0x4e, 0x15, 0xb2, 0xe1, 0xe2, 0x84, 0xbb, 0x47, 0x48, 0x4c, 0x0f, 0xe2, 0x74,
+	0x3d, 0x98, 0xd3, 0xf5, 0x5c, 0x41, 0x4e, 0x97, 0x12, 0x87, 0xb8, 0x06, 0xc3, 0xe1, 0x49, 0x6c,
+	0x60, 0x85, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0x57, 0x07, 0x6c, 0x6b, 0x10, 0x01, 0x00,
+	0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -202,9 +150,7 @@ const _ = grpc.SupportPackageIsVersion4
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type NodeServiceClient interface {
 	// 获取主节点信息
-	GetMaster(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*GetMasterResponse, error)
-	// 心跳检测
-	HeartBeat(ctx context.Context, in *HeartBeatRequest, opts ...grpc.CallOption) (*empty.Empty, error)
+	GetLeader(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*GetLeaderResponse, error)
 }
 
 type nodeServiceClient struct {
@@ -215,18 +161,9 @@ func NewNodeServiceClient(cc *grpc.ClientConn) NodeServiceClient {
 	return &nodeServiceClient{cc}
 }
 
-func (c *nodeServiceClient) GetMaster(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*GetMasterResponse, error) {
-	out := new(GetMasterResponse)
-	err := c.cc.Invoke(ctx, "/node.NodeService/GetMaster", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) HeartBeat(ctx context.Context, in *HeartBeatRequest, opts ...grpc.CallOption) (*empty.Empty, error) {
-	out := new(empty.Empty)
-	err := c.cc.Invoke(ctx, "/node.NodeService/HeartBeat", in, out, opts...)
+func (c *nodeServiceClient) GetLeader(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*GetLeaderResponse, error) {
+	out := new(GetLeaderResponse)
+	err := c.cc.Invoke(ctx, "/node.NodeService/GetLeader", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -236,58 +173,35 @@ func (c *nodeServiceClient) HeartBeat(ctx context.Context, in *HeartBeatRequest,
 // NodeServiceServer is the server API for NodeService service.
 type NodeServiceServer interface {
 	// 获取主节点信息
-	GetMaster(context.Context, *empty.Empty) (*GetMasterResponse, error)
-	// 心跳检测
-	HeartBeat(context.Context, *HeartBeatRequest) (*empty.Empty, error)
+	GetLeader(context.Context, *empty.Empty) (*GetLeaderResponse, error)
 }
 
 // UnimplementedNodeServiceServer can be embedded to have forward compatible implementations.
 type UnimplementedNodeServiceServer struct {
 }
 
-func (*UnimplementedNodeServiceServer) GetMaster(ctx context.Context, req *empty.Empty) (*GetMasterResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetMaster not implemented")
-}
-func (*UnimplementedNodeServiceServer) HeartBeat(ctx context.Context, req *HeartBeatRequest) (*empty.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method HeartBeat not implemented")
+func (*UnimplementedNodeServiceServer) GetLeader(ctx context.Context, req *empty.Empty) (*GetLeaderResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetLeader not implemented")
 }
 
 func RegisterNodeServiceServer(s *grpc.Server, srv NodeServiceServer) {
 	s.RegisterService(&_NodeService_serviceDesc, srv)
 }
 
-func _NodeService_GetMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _NodeService_GetLeader_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(empty.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(NodeServiceServer).GetMaster(ctx, in)
+		return srv.(NodeServiceServer).GetLeader(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/node.NodeService/GetMaster",
+		FullMethod: "/node.NodeService/GetLeader",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).GetMaster(ctx, req.(*empty.Empty))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NodeService_HeartBeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(HeartBeatRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).HeartBeat(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/node.NodeService/HeartBeat",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).HeartBeat(ctx, req.(*HeartBeatRequest))
+		return srv.(NodeServiceServer).GetLeader(ctx, req.(*empty.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -297,12 +211,8 @@ var _NodeService_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*NodeServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetMaster",
-			Handler:    _NodeService_GetMaster_Handler,
-		},
-		{
-			MethodName: "HeartBeat",
-			Handler:    _NodeService_HeartBeat_Handler,
+			MethodName: "GetLeader",
+			Handler:    _NodeService_GetLeader_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

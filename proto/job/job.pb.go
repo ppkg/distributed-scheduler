@@ -433,7 +433,7 @@ type JobServiceClient interface {
 	AsyncSubmit(ctx context.Context, opts ...grpc.CallOption) (JobService_AsyncSubmitClient, error)
 	// 异步通知
 	AsyncNotify(ctx context.Context, in *AsyncNotifyRequest, opts ...grpc.CallOption) (JobService_AsyncNotifyClient, error)
-	// 同步提交job
+	// 同步提交job(当调度器挂掉会导致job处理中断，谨用)
 	SyncSubmit(ctx context.Context, opts ...grpc.CallOption) (JobService_SyncSubmitClient, error)
 }
 
@@ -551,7 +551,7 @@ type JobServiceServer interface {
 	AsyncSubmit(JobService_AsyncSubmitServer) error
 	// 异步通知
 	AsyncNotify(*AsyncNotifyRequest, JobService_AsyncNotifyServer) error
-	// 同步提交job
+	// 同步提交job(当调度器挂掉会导致job处理中断，谨用)
 	SyncSubmit(JobService_SyncSubmitServer) error
 }
 

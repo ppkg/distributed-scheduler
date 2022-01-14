@@ -7,22 +7,14 @@ import "google/protobuf/empty.proto";
 //------------------节点信息模块------------------------------------------
 service NodeService {
   // 获取主节点信息
-  rpc GetMaster(google.protobuf.Empty) returns (GetMasterResponse);
-  // 心跳检测
-  rpc HeartBeat(HeartBeatRequest) returns (google.protobuf.Empty);
+  rpc GetLeader(google.protobuf.Empty) returns (GetLeaderResponse);
 }
 
-message GetMasterResponse { NodeInfo NodeInfo = 1; }
+message GetLeaderResponse { NodeInfo NodeInfo = 1; }
 
 message NodeInfo {
   // 服务器地址
   string Endpoint = 1;
   // 节点ID
   string NodeId = 2;
-}
-
-message HeartBeatRequest {
-  NodeInfo NodeInfo = 1;
-  // worker节点所有支持的插件
-  repeated string PluginSet = 2;
 }

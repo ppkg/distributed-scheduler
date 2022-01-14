@@ -1,11 +1,11 @@
 package errCode
 
 const (
-	ErrNonMasterNode = 100100
+	ErrNonLeaderNode = 100100
 )
 
 func init() {
 	regErrCode(map[int]string{
-		ErrNonMasterNode: "当前不是master节点",
+		ErrNonLeaderNode: "当前不是leader节点",
 	})
 }
