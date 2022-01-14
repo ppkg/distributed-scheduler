@@ -61,6 +61,16 @@ func (s *workerIndexer) GetWorker(nodeId string) (WorkerNode, bool) {
 	return node, ok
 }
 
+func (s *workerIndexer) GetAllWorker() []WorkerNode {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	list := make([]WorkerNode, 0, len(s.workers))
+	for _, item := range s.workers {
+		list = append(list, item)
+	}
+	return list
+}
+
 // 工作节点
 type WorkerNode struct {
 	NodeId   string

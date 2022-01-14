@@ -9,6 +9,7 @@ import (
 	"distributed-scheduler/util"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/panjf2000/ants/v2"
 	"github.com/ppkg/glog"
@@ -36,6 +37,10 @@ type scheduleEngine struct {
 
 	// 异步通知渠道
 	NotifyChannel *workerNotifyChannel
+
+	// 对worker节点原子操作map
+	atomicWorker       *atomicWorker
+	checkErrWorkerFunc func(worker WorkerNode)
 }
 
 func NewScheduler(workerThread int) *scheduleEngine {
@@ -47,6 +52,7 @@ func NewScheduler(workerThread int) *scheduleEngine {
 		workerConns:       NewWorkerConns(),
 		NotifyChannel:     NewWorkerNotifyChannel(),
 		taskQueue:         make(chan func(worker WorkerNode), 100000000),
+		atomicWorker:      NewAtomicWorker(),
 	}
 	return engine
 }
@@ -97,6 +103,30 @@ func (s *scheduleEngine) RemoveWorker(worker WorkerNode) {
 func (s *scheduleEngine) UpdateWorkerIndex(worker WorkerNode) {
 	s.workerIndexer.RemoveWorker(worker)
 	s.workerIndexer.AddWorker(worker)
+}
+
+// 批量更新worker索引
+func (s *scheduleEngine) BatchUpdateWorkerIndex(list []WorkerNode) {
+	for _, item := range list {
+		if _, ok := s.workerIndexer.GetWorker(item.NodeId); !ok {
+			s.AddWorker(item)
+			continue
+		}
+		s.UpdateWorkerIndex(item)
+	}
+	for _, worker := range s.workerIndexer.GetAllWorker() {
+		isFound := false
+		for _, item := range list {
+			if worker.NodeId == item.NodeId {
+				isFound = true
+				break
+			}
+		}
+		if isFound {
+			continue
+		}
+		s.RemoveWorker(worker)
+	}
 }
 
 // 推送任务
@@ -155,12 +185,21 @@ func (s *scheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
 
 	if err != nil {
 		t.Status = enum.ExceptionTaskStatus
+		if s.checkErrWorkerFunc != nil && atomic.CompareAndSwapInt32(s.atomicWorker.Get(worker.NodeId), 0, 1) {
+			// 检查推送出错worker是在正常运行，不正常就从索引中移除worker
+			s.checkErrWorkerFunc(worker)
+			atomic.CompareAndSwapInt32(s.atomicWorker.Get(worker.NodeId), 1, 0)
+		}
 		return err
 	}
 
 	t.Status = resp.Status
 	t.Output = resp.Result
 	return nil
+}
+
+func (s *scheduleEngine) SetCheckErrWorkerFunc(fn func(worker WorkerNode)) {
+	s.checkErrWorkerFunc = fn
 }
 
 // 优选worker工作节点
@@ -359,4 +398,41 @@ func (s *workerPoolMap) Remove(worker WorkerNode) {
 	ch := s.closeChannels[worker.NodeId]
 	close(ch)
 	delete(s.closeChannels, worker.NodeId)
+}
+
+// 对worker提供原子操作
+type atomicWorker struct {
+	data map[string]*int32
+	lock sync.RWMutex
+}
+
+func NewAtomicWorker() *atomicWorker {
+	return &atomicWorker{
+		data: make(map[string]*int32),
+	}
+}
+
+func (s *atomicWorker) Get(nodeId string) *int32 {
+	val := func() *int32 {
+		s.lock.RLock()
+		defer s.lock.RUnlock()
+		val, ok := s.data[nodeId]
+		if ok {
+			return val
+		}
+		return nil
+	}()
+	if val != nil {
+		return val
+	}
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	val, ok := s.data[nodeId]
+	if ok {
+		return val
+	}
+	var n int32 = 0
+	val = &n
+	s.data[nodeId] = val
+	return val
 }

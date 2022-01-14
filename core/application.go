@@ -77,6 +77,7 @@ func (s *ApplicationContext) watchRaftLeader() {
 				}
 				s.restartUndoneAsyncJob()
 			})
+			s.pullAllWorker()
 			continue
 		}
 		s.updateCurrentNacosRole(enum.FollowerRaftRole)
@@ -134,6 +135,8 @@ func (s *ApplicationContext) initDefaultConfig() {
 	s.conf.Nacos.ClusterName = os.Getenv("NACOS_CLUSTER_NAME")
 	s.conf.Nacos.GroupName = os.Getenv("NACOS_GROUP_NAME")
 	s.conf.Nacos.Namespace = os.Getenv("NACOS_NAMESPACE")
+	s.conf.Nacos.WorkerServiceName = "distributed-workder"
+	s.conf.Nacos.WorkerStartupTimeKey = "workerStartupTime"
 }
 
 func (s *ApplicationContext) appendNacosAddrConfig(addr string) {
@@ -148,6 +151,7 @@ func (s *ApplicationContext) appendNacosAddrConfig(addr string) {
 func (s *ApplicationContext) Run() error {
 	// 初始化调度器引擎
 	s.Scheduler = NewScheduler(s.conf.SchedulerThreadCount)
+	s.Scheduler.SetCheckErrWorkerFunc(s.checkErrWorker)
 	// 初始化job容器
 	s.jobContainer = NewJobContainer()
 
@@ -182,6 +186,9 @@ func (s *ApplicationContext) Run() error {
 	// 监控raft身份变更并及时处理
 	go s.watchRaftLeader()
 
+	// 监控worker服务变更并及时更新worker索引
+	s.watchWorkerService()
+
 	// 初始化grpc服务
 	err = s.doServe()
 	if err != nil {
@@ -189,6 +196,46 @@ func (s *ApplicationContext) Run() error {
 		return err
 	}
 	return nil
+}
+
+// 检查worker节点是否正常，不正常则删除索引
+func (s *ApplicationContext) checkErrWorker(worker WorkerNode) {
+	glog.Errorf("ApplicationContext/checkErrWorker 收到worker推送错误节点：%s", kit.JsonEncode(worker))
+	serviceList := s.getServiceList(s.conf.Nacos.WorkerServiceName)
+	for _, item := range serviceList {
+		if item.Metadata["nodeId"] == worker.NodeId {
+			return
+		}
+	}
+	// 如果匹配不到就说明是异常工作节点，需要移除
+	s.Scheduler.RemoveWorker(worker)
+}
+
+func (s *ApplicationContext) watchWorkerService() {
+	s.configClient.ListenConfig(vo.ConfigParam{
+		DataId: s.conf.Nacos.WorkerStartupTimeKey,
+		Group:  s.conf.Nacos.ConfigGroup,
+		OnChange: func(namespace, group, dataId, data string) {
+			if !s.IsLeaderNode() {
+				return
+			}
+			s.pullAllWorker()
+		},
+	})
+}
+
+// 全量拉取worker服务信息然后进行更新worker索引
+func (s *ApplicationContext) pullAllWorker() {
+	list := s.getServiceList(s.conf.Nacos.WorkerServiceName)
+	nodeList := make([]WorkerNode, 0, len(list))
+	for _, item := range list {
+		nodeList = append(nodeList, WorkerNode{
+			NodeId:    item.Metadata["nodeId"],
+			Endpoint:  fmt.Sprintf("%s:%d", item.Ip, item.Port),
+			PluginSet: strings.Split(item.Metadata["pluginSet"], ","),
+		})
+	}
+	s.Scheduler.BatchUpdateWorkerIndex(nodeList)
 }
 
 // 获取健康的服务列表
@@ -448,8 +495,9 @@ func (s *ApplicationContext) initNacos() error {
 		Healthy:     true,
 		Ephemeral:   true,
 		Metadata: map[string]string{
-			"nodeId": s.conf.Raft.NodeId,
-			"role":   enum.FollowerRaftRole,
+			"appName": s.conf.AppName,
+			"nodeId":  s.conf.Raft.NodeId,
+			"role":    enum.FollowerRaftRole,
 		},
 		ClusterName: s.conf.Nacos.ClusterName, // default value is DEFAULT
 		GroupName:   s.conf.Nacos.GroupName,   // default value is DEFAULT_GROUP
@@ -520,7 +568,6 @@ func (s *ApplicationContext) watchServiceDiscovery() error {
 func (s *ApplicationContext) IsLeaderNode() bool {
 	future := s.raft.VerifyLeader()
 	if future.Error() != nil {
-		glog.Infof("ApplicationContext/IsLeaderNode 当前(%s)不是主节点，code:%v", s.conf.Raft.NodeId, future.Error())
 		return false
 	}
 	return true
@@ -566,11 +613,19 @@ type RaftConfig struct {
 }
 
 type NacosConfig struct {
+	// 工作节点服务名
+	WorkerServiceName string
+	// nacos服务发现的配置参数
 	Addrs       []string
 	Ports       []int
 	Namespace   string
 	GroupName   string
 	ClusterName string
+
+	// nacos配置服务的配置参数
+	// worker工作节点启动时间key
+	WorkerStartupTimeKey string
+	ConfigGroup          string
 }
 
 type Option func(conf *Config)
@@ -649,4 +704,10 @@ func parseNacosAddr(addr string) (string, int) {
 		}
 	}
 	return pathInfo[0], port
+}
+
+func WithNacosConfigGroupOption(group string) Option {
+	return func(conf *Config) {
+		conf.Nacos.ConfigGroup = group
+	}
 }
