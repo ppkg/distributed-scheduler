@@ -187,8 +187,10 @@ func (s *scheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
 		t.Status = enum.ExceptionTaskStatus
 		if s.checkErrWorkerFunc != nil && atomic.CompareAndSwapInt32(s.atomicWorker.Get(worker.NodeId), 0, 1) {
 			// 检查推送出错worker是在正常运行，不正常就从索引中移除worker
-			s.checkErrWorkerFunc(worker)
-			atomic.CompareAndSwapInt32(s.atomicWorker.Get(worker.NodeId), 1, 0)
+			go func() {
+				s.checkErrWorkerFunc(worker)
+				atomic.CompareAndSwapInt32(s.atomicWorker.Get(worker.NodeId), 1, 0)
+			}()
 		}
 		return err
 	}
