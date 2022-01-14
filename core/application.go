@@ -270,7 +270,7 @@ func (s *ApplicationContext) checkInvalidPeer() {
 // 初始化raft选举
 func (s *ApplicationContext) initRaft(ctx context.Context, fsm raft.FSM) error {
 	c := raft.DefaultConfig()
-	c.LogLevel = "info"
+	c.LogLevel = "warn"
 	c.Logger = NewLogger(&hclog.LoggerOptions{
 		Name:  "raft",
 		Level: hclog.LevelFromString(c.LogLevel),
