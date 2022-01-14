@@ -223,6 +223,8 @@ func (s *ApplicationContext) Run() error {
 	time.AfterFunc(3*time.Minute, func() {
 		// 监控raft身份并及时处理
 		go s.watchRaftMaster()
+		// 检查raft集群是否有无效节点，如果有则删除该节点
+		go s.checkInvalidPeer()
 	})
 
 	// 初始化grpc服务
@@ -232,6 +234,37 @@ func (s *ApplicationContext) Run() error {
 		return err
 	}
 	return nil
+}
+
+// 检查raft集群是否有无效节点，如果有则删除该节点
+func (s *ApplicationContext) checkInvalidPeer() {
+	if !s.IsMasterNode() {
+		return
+	}
+	instanceList, err := s.namingClient.SelectInstances(vo.SelectInstancesParam{
+		ServiceName: s.conf.AppName,
+		HealthyOnly: true,
+		Clusters: []string{
+			s.conf.Nacos.ClusterName,
+		},
+		GroupName: s.conf.Nacos.GroupName,
+	})
+	if err != nil {
+		glog.Errorf("ApplicationContext/checkInvalidPeer 获取已经注册健康服务异常,err:%+v", err)
+		return
+	}
+	instanceMap := make(map[string]struct{})
+	for _, item := range instanceList {
+		instanceMap[fmt.Sprintf("%s:%d", item.Ip, item.Port)] = struct{}{}
+	}
+	peerList := s.raft.GetConfiguration().Configuration().Servers
+	for _, item := range peerList {
+		if _, ok := instanceMap[string(item.Address)]; ok {
+			continue
+		}
+		s.RemovePeer(string(item.ID))
+		glog.Infof("ApplicationContext/checkInvalidPeer 无效raft节点(%s,%s)，移除成功", item.ID, item.Address)
+	}
 }
 
 // 初始化raft选举
