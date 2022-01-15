@@ -138,12 +138,7 @@ func (s *ApplicationContext) initDefaultConfig() {
 		s.conf.Nacos.ServiceGroup = "DEFAULT_GROUP"
 	}
 	s.conf.Nacos.Namespace = os.Getenv("NACOS_NAMESPACE")
-	s.conf.Nacos.ConfigGroup = os.Getenv("NACOS_CONFIG_GROUP")
-	if s.conf.Nacos.ConfigGroup == "" {
-		s.conf.Nacos.ConfigGroup = "DEFAULT_GROUP"
-	}
 	s.conf.Nacos.WorkerServiceName = "distributed-workder"
-	s.conf.Nacos.WorkerStartupTimeKey = "workerStartupTime"
 }
 
 func (s *ApplicationContext) appendNacosAddrConfig(addr string) {
@@ -158,7 +153,6 @@ func (s *ApplicationContext) appendNacosAddrConfig(addr string) {
 func (s *ApplicationContext) Run() error {
 	// 初始化调度器引擎
 	s.Scheduler = NewScheduler(s.conf.SchedulerThreadCount)
-	s.Scheduler.SetCheckErrWorkerFunc(s.checkErrWorker)
 	// 初始化job容器
 	s.jobContainer = NewJobContainer()
 
@@ -183,18 +177,22 @@ func (s *ApplicationContext) Run() error {
 		return err
 	}
 
-	// 监听服务发现
-	err = s.watchServiceDiscovery()
+	// 监听scheduler服务发现
+	err = s.watchSchedulerService()
 	if err != nil {
-		glog.Errorf("Application/run 监听服务发现异常,err:%v", err)
+		glog.Errorf("Application/run 监听scheduler服务发现异常,err:%v", err)
+		return err
+	}
+
+	// 监听worker服务发现
+	err = s.watchWorkerService()
+	if err != nil {
+		glog.Errorf("Application/run 监听worker服务发现异常,err:%v", err)
 		return err
 	}
 
 	// 监控raft身份变更并及时处理
 	go s.watchRaftLeader()
-
-	// 监控worker服务变更并及时更新worker索引
-	s.watchWorkerService()
 
 	// 初始化grpc服务
 	err = s.doServe()
@@ -203,33 +201,6 @@ func (s *ApplicationContext) Run() error {
 		return err
 	}
 	return nil
-}
-
-// 检查worker节点是否正常，不正常则删除索引
-func (s *ApplicationContext) checkErrWorker(worker WorkerNode) {
-	glog.Errorf("ApplicationContext/checkErrWorker 收到worker推送错误节点：%s", kit.JsonEncode(worker))
-	serviceList := s.getServiceList(s.conf.Nacos.WorkerServiceName)
-	for _, item := range serviceList {
-		if item.Metadata["nodeId"] == worker.NodeId {
-			return
-		}
-	}
-	// 如果匹配不到就说明是异常工作节点，需要移除
-	s.Scheduler.RemoveWorker(worker)
-}
-
-// 监控worker服务变更并及时更新worker索引
-func (s *ApplicationContext) watchWorkerService() {
-	s.configClient.ListenConfig(vo.ConfigParam{
-		DataId: s.conf.Nacos.WorkerStartupTimeKey,
-		Group:  s.conf.Nacos.ConfigGroup,
-		OnChange: func(namespace, group, dataId, data string) {
-			if !s.IsLeaderNode() {
-				return
-			}
-			s.pullAllWorker()
-		},
-	})
 }
 
 // 全量拉取worker服务信息然后进行更新worker索引
@@ -345,6 +316,7 @@ func (s *ApplicationContext) updateNacosInstance(instance nacosModel.Instance) {
 		ClusterName: instance.ClusterName,
 		ServiceName: instance.ServiceName,
 		GroupName:   s.conf.Nacos.ServiceGroup,
+		Ephemeral:   true,
 		Weight:      instance.Weight,
 		Enable:      instance.Enable,
 		Metadata:    instance.Metadata,
@@ -519,8 +491,25 @@ func (s *ApplicationContext) initNacos() error {
 	return nil
 }
 
-// 监听服务发现
-func (s *ApplicationContext) watchServiceDiscovery() error {
+// 监听worker服务发现
+func (s *ApplicationContext) watchWorkerService() error {
+	return s.namingClient.Subscribe(&vo.SubscribeParam{
+		ServiceName: s.conf.Nacos.WorkerServiceName,
+		GroupName:   s.conf.Nacos.ServiceGroup,
+		Clusters: []string{
+			s.conf.Nacos.ClusterName,
+		},
+		SubscribeCallback: func(services []model.SubscribeService, nacosErr error) {
+			if !s.IsLeaderNode() {
+				return
+			}
+			s.pullAllWorker()
+		},
+	})
+}
+
+// 监听scheduler服务发现
+func (s *ApplicationContext) watchSchedulerService() error {
 	return s.namingClient.Subscribe(&vo.SubscribeParam{
 		ServiceName: s.conf.AppName,
 		GroupName:   s.conf.Nacos.ServiceGroup,
@@ -625,11 +614,6 @@ type NacosConfig struct {
 	Namespace    string
 	ServiceGroup string
 	ClusterName  string
-
-	// nacos配置服务的配置参数
-	// worker工作节点启动时间key
-	WorkerStartupTimeKey string
-	ConfigGroup          string
 }
 
 type Option func(conf *Config)
@@ -708,10 +692,4 @@ func parseNacosAddr(addr string) (string, int) {
 		}
 	}
 	return pathInfo[0], port
-}
-
-func WithNacosConfigGroupOption(group string) Option {
-	return func(conf *Config) {
-		conf.Nacos.ConfigGroup = group
-	}
 }
