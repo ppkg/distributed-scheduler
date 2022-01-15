@@ -8,7 +8,6 @@ import (
 	"log"
 	"runtime"
 	"sort"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -36,19 +35,9 @@ func NewLogger(opts *hclog.LoggerOptions) *logger {
 		opts = &hclog.LoggerOptions{}
 	}
 
-	output := opts.Output
-	if output == nil {
-		output = hclog.DefaultOutput
-	}
-
 	level := opts.Level
 	if level == hclog.NoLevel {
 		level = hclog.DefaultLevel
-	}
-
-	mutex := opts.Mutex
-	if mutex == nil {
-		mutex = new(sync.Mutex)
 	}
 
 	l := &logger{
@@ -75,7 +64,7 @@ func (s *logger) logJSON(msg string, args ...interface{}) string {
 	vals := s.jsonMapEntry(time.Now(), s.name, hclog.Level(s.level), msg)
 	args = append(s.implied, args...)
 
-	if args != nil && len(args) > 0 {
+	if len(args) > 0 {
 		if len(args)%2 != 0 {
 			cs, ok := args[len(args)-1].(hclog.CapturedStacktrace)
 			if ok {
@@ -161,7 +150,7 @@ func (s *logger) jsonMapEntry(t time.Time, name string, level hclog.Level, msg s
 // vals can be any type, but display is implementation specific
 // Emit a message and key/value pairs at a provided log level
 func (s *logger) Log(level hclog.Level, msg string, args ...interface{}) {
-	fn := glog.Infof
+	var fn func(format string, args ...interface{})
 	switch level {
 	case hclog.Error:
 		fn = glog.Errorf

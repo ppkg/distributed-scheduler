@@ -44,7 +44,9 @@ func (s *jobService) AsyncSubmit(stream job.JobService_AsyncSubmitServer) error 
 		return err
 	}
 
-	go s.appCtx.StartJob(jobInfo)
+	go func() {
+		_ = s.appCtx.StartJob(jobInfo)
+	}()
 
 	return stream.SendAndClose(
 		&job.AsyncSubmitResponse{
@@ -75,7 +77,7 @@ func (s *jobService) AsyncNotify(req *job.AsyncNotifyRequest, steam job.JobServi
 		})
 		if err == nil {
 			// 更新推送状态
-			s.jobRepo.UpdateNotifyStatus(s.appCtx.Db, item.Job.Id, enum.SuccessNotifyStatus)
+			_=s.jobRepo.UpdateNotifyStatus(s.appCtx.Db, item.Job.Id, enum.SuccessNotifyStatus)
 			glog.Infof("jobService/AsyncNotify 通知worker(%s)成功,jobId:%d,jobName:%s", req.NodeId, item.Job.Id, item.Job.Name)
 			continue
 		}
@@ -91,7 +93,7 @@ func (s *jobService) AsyncNotify(req *job.AsyncNotifyRequest, steam job.JobServi
 	myJob.NotifyCount++
 	// 如果重试超过5次则不再重推通知,一下推送状态
 	if myJob.NotifyCount > 5 {
-		s.jobRepo.UpdateNotifyStatus(s.appCtx.Db, myJob.Job.Id, enum.FailNotifyStatus)
+		_=s.jobRepo.UpdateNotifyStatus(s.appCtx.Db, myJob.Job.Id, enum.FailNotifyStatus)
 		return err
 	}
 

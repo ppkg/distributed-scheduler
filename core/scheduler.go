@@ -104,7 +104,7 @@ func (s *scheduleEngine) BatchUpdateWorkerIndex(list []WorkerNode) {
 	for _, item := range list {
 		worker, ok := s.workerIndexer.GetWorker(item.NodeId)
 		if !ok {
-			s.AddWorker(item)
+			_=s.AddWorker(item)
 			continue
 		}
 		// 如果worker支持的插件没有变化则跳过

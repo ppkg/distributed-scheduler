@@ -249,7 +249,9 @@ func (s *ApplicationContext) restartUndoneAsyncJob() {
 	glog.Infof("ApplicationContext/restartUndoneAsyncJob 共有%d个job重启,分别是:%s", len(list), strings.Join(logSlice, ","))
 
 	for _, item := range list {
-		go s.StartJob(item)
+		go func (job *dto.JobInfo)  {
+			_=s.StartJob(job)
+		}(item)
 	}
 }
 
