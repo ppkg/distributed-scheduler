@@ -218,6 +218,7 @@ func (s *ApplicationContext) checkErrWorker(worker WorkerNode) {
 	s.Scheduler.RemoveWorker(worker)
 }
 
+// 监控worker服务变更并及时更新worker索引
 func (s *ApplicationContext) watchWorkerService() {
 	s.configClient.ListenConfig(vo.ConfigParam{
 		DataId: s.conf.Nacos.WorkerStartupTimeKey,
@@ -506,8 +507,8 @@ func (s *ApplicationContext) initNacos() error {
 			"nodeId":  s.conf.Raft.NodeId,
 			"role":    enum.FollowerRaftRole,
 		},
-		ClusterName: s.conf.Nacos.ClusterName, // default value is DEFAULT
-		GroupName:   s.conf.Nacos.ServiceGroup,   // default value is DEFAULT_GROUP
+		ClusterName: s.conf.Nacos.ClusterName,  // default value is DEFAULT
+		GroupName:   s.conf.Nacos.ServiceGroup, // default value is DEFAULT_GROUP
 	})
 	if err != nil {
 		return fmt.Errorf("当前节点:%s，注册服务发现异常:%v", s.conf.Raft.NodeId, err)
@@ -530,7 +531,6 @@ func (s *ApplicationContext) watchServiceDiscovery() error {
 			if !s.IsLeaderNode() {
 				return
 			}
-			glog.Infof("Application/watchServiceDiscovery 节点(%s)服务发现回调通知:%s,nacosErr:%v", s.conf.Raft.NodeId, kit.JsonEncode(services), nacosErr)
 
 			serviceList := s.getServiceList(s.conf.AppName)
 			serviceMap := make(map[string]struct{}, len(serviceList))
@@ -574,10 +574,7 @@ func (s *ApplicationContext) watchServiceDiscovery() error {
 // 判断是否为主节点
 func (s *ApplicationContext) IsLeaderNode() bool {
 	future := s.raft.VerifyLeader()
-	if future.Error() != nil {
-		return false
-	}
-	return true
+	return future.Error() == nil
 }
 
 // 获取主节点信息
@@ -623,11 +620,11 @@ type NacosConfig struct {
 	// 工作节点服务名
 	WorkerServiceName string
 	// nacos服务发现的配置参数
-	Addrs       []string
-	Ports       []int
-	Namespace   string
-	ServiceGroup   string
-	ClusterName string
+	Addrs        []string
+	Ports        []int
+	Namespace    string
+	ServiceGroup string
+	ClusterName  string
 
 	// nacos配置服务的配置参数
 	// worker工作节点启动时间key

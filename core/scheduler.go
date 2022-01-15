@@ -108,8 +108,13 @@ func (s *scheduleEngine) UpdateWorkerIndex(worker WorkerNode) {
 // 批量更新worker索引
 func (s *scheduleEngine) BatchUpdateWorkerIndex(list []WorkerNode) {
 	for _, item := range list {
-		if _, ok := s.workerIndexer.GetWorker(item.NodeId); !ok {
+		worker, ok := s.workerIndexer.GetWorker(item.NodeId)
+		if !ok {
 			s.AddWorker(item)
+			continue
+		}
+		// 如果worker支持的插件没有变化则跳过
+		if util.EqualStringSlice(worker.PluginSet, item.PluginSet) {
 			continue
 		}
 		s.UpdateWorkerIndex(item)
