@@ -91,6 +91,7 @@ loop:
 func (s *scheduleEngine) RemoveWorker(worker WorkerNode) {
 	s.workerIndexer.RemoveWorker(worker)
 	s.workerPools.Remove(worker)
+	s.NotifyChannel.RemoveAndCloseChannel(worker.NodeId)
 }
 
 // 更新worker索引
@@ -104,7 +105,7 @@ func (s *scheduleEngine) BatchUpdateWorkerIndex(list []WorkerNode) {
 	for _, item := range list {
 		worker, ok := s.workerIndexer.GetWorker(item.NodeId)
 		if !ok {
-			_=s.AddWorker(item)
+			_ = s.AddWorker(item)
 			continue
 		}
 		// 如果worker支持的插件没有变化则跳过
