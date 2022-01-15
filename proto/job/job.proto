@@ -2,12 +2,14 @@ syntax = "proto3";
 
 package job;
 
+import "google/protobuf/empty.proto";
+
 //------------------Job模块------------------------------------------
 service JobService {
   // 异步提交job
   rpc AsyncSubmit(stream AsyncSubmitRequest) returns (AsyncSubmitResponse);
   // 异步通知
-  rpc AsyncNotify(AsyncNotifyRequest) returns (stream AsyncNotifyResponse);
+  rpc AsyncNotify(AsyncNotifyRequest) returns (google.protobuf.Empty);
   // 同步提交job(当调度器挂掉会导致job处理中断，谨用)
   rpc SyncSubmit(stream SyncSubmitRequest) returns (SyncSubmitResponse);
 }
@@ -15,7 +17,7 @@ service JobService {
 message AsyncSubmitRequest {
   // job名称
   string Name = 1;
-  // job类型
+  // job类型,回调通知时根据job类型执行不同的操作
   string Type = 2;
   // 插件集合
   repeated string PluginSet = 3;
@@ -31,15 +33,10 @@ message AsyncSubmitResponse {
 }
 
 message AsyncNotifyRequest {
-  // 节点ID
-  string NodeId = 1;
-}
-
-message AsyncNotifyResponse {
   int64 Id = 1;
   // job名称
   string Name = 2;
-  // job类型
+  // job类型,根据不同值执行对应业务逻辑
   string Type = 3;
   // job状态,2：执行完成，3：取消执行，4：系统异常，5：task推送失败，6：运行超时，7：业务处理异常
   int32 status = 4;
@@ -50,12 +47,10 @@ message AsyncNotifyResponse {
 message SyncSubmitRequest {
   // job名称
   string Name = 1;
-  // job类型
-  string Type = 2;
   // 插件集合
-  repeated string PluginSet = 3;
+  repeated string PluginSet = 2;
   // job数据
-  string Data = 4;
+  string Data = 3;
 }
 
 message SyncSubmitResponse {
