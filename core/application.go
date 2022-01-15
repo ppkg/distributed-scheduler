@@ -133,8 +133,15 @@ func (s *ApplicationContext) initDefaultConfig() {
 	}
 
 	s.conf.Nacos.ClusterName = os.Getenv("NACOS_CLUSTER_NAME")
-	s.conf.Nacos.GroupName = os.Getenv("NACOS_GROUP_NAME")
+	s.conf.Nacos.ServiceGroup = os.Getenv("NACOS_SERVICE_GROUP")
+	if s.conf.Nacos.ServiceGroup == "" {
+		s.conf.Nacos.ServiceGroup = "DEFAULT_GROUP"
+	}
 	s.conf.Nacos.Namespace = os.Getenv("NACOS_NAMESPACE")
+	s.conf.Nacos.ConfigGroup = os.Getenv("NACOS_CONFIG_GROUP")
+	if s.conf.Nacos.ConfigGroup == "" {
+		s.conf.Nacos.ConfigGroup = "DEFAULT_GROUP"
+	}
 	s.conf.Nacos.WorkerServiceName = "distributed-workder"
 	s.conf.Nacos.WorkerStartupTimeKey = "workerStartupTime"
 }
@@ -246,7 +253,7 @@ func (s *ApplicationContext) getServiceList(serviceName string) []nacosModel.Ins
 		Clusters: []string{
 			s.conf.Nacos.ClusterName,
 		},
-		GroupName: s.conf.Nacos.GroupName,
+		GroupName: s.conf.Nacos.ServiceGroup,
 	})
 	if err == nil {
 		return instanceList
@@ -336,7 +343,7 @@ func (s *ApplicationContext) updateNacosInstance(instance nacosModel.Instance) {
 		Port:        instance.Port,
 		ClusterName: instance.ClusterName,
 		ServiceName: instance.ServiceName,
-		GroupName:   s.conf.Nacos.GroupName,
+		GroupName:   s.conf.Nacos.ServiceGroup,
 		Weight:      instance.Weight,
 		Enable:      instance.Enable,
 		Metadata:    instance.Metadata,
@@ -500,7 +507,7 @@ func (s *ApplicationContext) initNacos() error {
 			"role":    enum.FollowerRaftRole,
 		},
 		ClusterName: s.conf.Nacos.ClusterName, // default value is DEFAULT
-		GroupName:   s.conf.Nacos.GroupName,   // default value is DEFAULT_GROUP
+		GroupName:   s.conf.Nacos.ServiceGroup,   // default value is DEFAULT_GROUP
 	})
 	if err != nil {
 		return fmt.Errorf("当前节点:%s，注册服务发现异常:%v", s.conf.Raft.NodeId, err)
@@ -515,7 +522,7 @@ func (s *ApplicationContext) initNacos() error {
 func (s *ApplicationContext) watchServiceDiscovery() error {
 	return s.namingClient.Subscribe(&vo.SubscribeParam{
 		ServiceName: s.conf.AppName,
-		GroupName:   s.conf.Nacos.GroupName,
+		GroupName:   s.conf.Nacos.ServiceGroup,
 		Clusters: []string{
 			s.conf.Nacos.ClusterName,
 		},
@@ -619,7 +626,7 @@ type NacosConfig struct {
 	Addrs       []string
 	Ports       []int
 	Namespace   string
-	GroupName   string
+	ServiceGroup   string
 	ClusterName string
 
 	// nacos配置服务的配置参数
@@ -675,9 +682,9 @@ func WithNacosAddrOption(addr string) Option {
 	}
 }
 
-func WithNacosGroupNameOption(group string) Option {
+func WithNacosServiceGroupOption(group string) Option {
 	return func(conf *Config) {
-		conf.Nacos.GroupName = group
+		conf.Nacos.ServiceGroup = group
 	}
 }
 
