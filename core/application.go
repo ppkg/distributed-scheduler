@@ -1,11 +1,6 @@
 package core
 
 import (
-	"distributed-scheduler/dto"
-	"distributed-scheduler/enum"
-	"distributed-scheduler/repository"
-	"distributed-scheduler/repository/impl"
-	"distributed-scheduler/util"
 	"fmt"
 	"net"
 	"os"
@@ -13,6 +8,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ppkg/distributed-scheduler/dto"
+	"github.com/ppkg/distributed-scheduler/enum"
+	"github.com/ppkg/distributed-scheduler/repository"
+	"github.com/ppkg/distributed-scheduler/repository/impl"
+	"github.com/ppkg/distributed-scheduler/util"
 
 	transport "github.com/Jille/raft-grpc-transport"
 	"github.com/hashicorp/go-hclog"

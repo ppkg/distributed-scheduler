@@ -2,8 +2,9 @@ package core
 
 import (
 	"context"
-	"distributed-scheduler/dto"
 	"sync"
+
+	"github.com/ppkg/distributed-scheduler/dto"
 )
 
 type runningJobContainer struct {

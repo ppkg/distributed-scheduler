@@ -1,4 +1,4 @@
-module distributed-scheduler
+module github.com/ppkg/distributed-scheduler
 
 go 1.16
 

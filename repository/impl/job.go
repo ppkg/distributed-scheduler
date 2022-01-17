@@ -1,9 +1,9 @@
 package impl
 
 import (
-	"distributed-scheduler/enum"
-	"distributed-scheduler/model"
-	"distributed-scheduler/repository"
+	"github.com/ppkg/distributed-scheduler/enum"
+	"github.com/ppkg/distributed-scheduler/model"
+	"github.com/ppkg/distributed-scheduler/repository"
 
 	"github.com/ppkg/glog"
 	"github.com/ppkg/kit"

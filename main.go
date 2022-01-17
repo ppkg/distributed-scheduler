@@ -1,13 +1,14 @@
 package main
 
 import (
-	"distributed-scheduler/core"
-	"distributed-scheduler/proto/job"
-	"distributed-scheduler/proto/node"
-	"distributed-scheduler/service"
 	"flag"
 	"fmt"
 	"log"
+
+	"github.com/ppkg/distributed-scheduler/core"
+	"github.com/ppkg/distributed-scheduler/proto/job"
+	"github.com/ppkg/distributed-scheduler/proto/node"
+	"github.com/ppkg/distributed-scheduler/service"
 
 	"google.golang.org/grpc"
 )

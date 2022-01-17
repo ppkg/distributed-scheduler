@@ -2,14 +2,15 @@ package core
 
 import (
 	"context"
-	"distributed-scheduler/dto"
-	"distributed-scheduler/enum"
-	"distributed-scheduler/model"
-	"distributed-scheduler/proto/job"
-	"distributed-scheduler/proto/task"
-	"distributed-scheduler/util"
 	"fmt"
 	"sync"
+
+	"github.com/ppkg/distributed-scheduler/dto"
+	"github.com/ppkg/distributed-scheduler/enum"
+	"github.com/ppkg/distributed-scheduler/model"
+	"github.com/ppkg/distributed-scheduler/proto/job"
+	"github.com/ppkg/distributed-scheduler/proto/task"
+	"github.com/ppkg/distributed-scheduler/util"
 
 	"github.com/panjf2000/ants/v2"
 	"github.com/ppkg/glog"

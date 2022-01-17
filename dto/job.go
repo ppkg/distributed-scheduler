@@ -1,12 +1,13 @@
 package dto
 
 import (
-	"distributed-scheduler/enum"
-	"distributed-scheduler/model"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
+
+	"github.com/ppkg/distributed-scheduler/enum"
+	"github.com/ppkg/distributed-scheduler/model"
 )
 
 type JobInfo struct {

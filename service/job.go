@@ -2,16 +2,17 @@ package service
 
 import (
 	"context"
-	"distributed-scheduler/core"
-	"distributed-scheduler/dto"
-	"distributed-scheduler/errCode"
-	"distributed-scheduler/model"
-	"distributed-scheduler/proto/job"
-	"distributed-scheduler/repository"
-	"distributed-scheduler/repository/impl"
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/ppkg/distributed-scheduler/core"
+	"github.com/ppkg/distributed-scheduler/dto"
+	"github.com/ppkg/distributed-scheduler/errCode"
+	"github.com/ppkg/distributed-scheduler/model"
+	"github.com/ppkg/distributed-scheduler/proto/job"
+	"github.com/ppkg/distributed-scheduler/repository"
+	"github.com/ppkg/distributed-scheduler/repository/impl"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/ppkg/glog"

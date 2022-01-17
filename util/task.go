@@ -2,10 +2,11 @@ package util
 
 import (
 	"context"
-	"distributed-scheduler/dto"
-	"distributed-scheduler/enum"
-	"distributed-scheduler/model"
 	"sync/atomic"
+
+	"github.com/ppkg/distributed-scheduler/dto"
+	"github.com/ppkg/distributed-scheduler/enum"
+	"github.com/ppkg/distributed-scheduler/model"
 )
 
 // 取消通知

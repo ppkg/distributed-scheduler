@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"distributed-scheduler/model"
+	"github.com/ppkg/distributed-scheduler/model"
 
 	"gorm.io/gorm"
 )

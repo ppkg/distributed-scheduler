@@ -2,8 +2,9 @@ package service
 
 import (
 	"context"
-	"distributed-scheduler/core"
-	"distributed-scheduler/proto/node"
+
+	"github.com/ppkg/distributed-scheduler/core"
+	"github.com/ppkg/distributed-scheduler/proto/node"
 
 	"github.com/golang/protobuf/ptypes/empty"
 )
