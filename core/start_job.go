@@ -97,7 +97,24 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 
 	// 如果是异步job并且需要通知则推送通知
 	if jobInfo.Job.IsAsync == 1 && jobInfo.Job.IsNotify == 1 {
-		s.Scheduler.DispatchJobNotify(jobInfo)
+		s.Scheduler.DispatchJobNotify(jobInfo, func(job *dto.JobInfo, err error) {
+			var myErr error
+			if err == nil {
+				job.Job.NotifyStatus = enum.SuccessNotifyStatus
+				myErr = s.jobRepo.UpdateNotifyStatus(s.Db, job.Job)
+				if myErr != nil {
+					glog.Errorf("ApplicationContext/StartJob 推送job回调通知异常,id:%d,err:%+v", job.Job.Id, myErr)
+				}
+				return
+			}
+
+			job.Job.NotifyStatus = enum.FailNotifyStatus
+			job.Job.Message = err.Error()
+			myErr = s.jobRepo.UpdateNotifyStatus(s.Db, job.Job)
+			if myErr != nil {
+				glog.Errorf("ApplicationContext/StartJob 推送job回调通知异常,id:%d,err:%+v", job.Job.Id, myErr)
+			}
+		})
 	}
 	return nil
 }
@@ -186,7 +203,7 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 		}
 
 		// 判断是否继续创建下一个
-		pos := util.FindPluginPos(job.Job.PluginSet, task.Plugin)
+		pos := util.FindHandlerPos(job.Job.PluginSet, task.Plugin)
 		if pos == -1 {
 			glog.Errorf("ApplicationContext/taskCallback job找不到plugin(%s),id:%d", task.Plugin, task.Id)
 			util.CancelNotify(ctx, job, fmt.Sprintf("job(%d,%s)不支持plugin(%s)", job.Job.Id, job.Job.Name, task.Plugin))
@@ -249,8 +266,8 @@ func (s *ApplicationContext) restartUndoneAsyncJob() {
 	glog.Infof("ApplicationContext/restartUndoneAsyncJob 共有%d个job重启,分别是:%s", len(list), strings.Join(logSlice, ","))
 
 	for _, item := range list {
-		go func (job *dto.JobInfo)  {
-			_=s.StartJob(job)
+		go func(job *dto.JobInfo) {
+			_ = s.StartJob(job)
 		}(item)
 	}
 }
@@ -263,7 +280,7 @@ func (s *ApplicationContext) loadUndoneAsyncJob() ([]*dto.JobInfo, error) {
 		"startTime": startTime,
 		"endTime":   endTime,
 		"isAsync":   1,
-		"inStatus":  []int32{enum.PendingJobStatus, enum.DoingJobStatus, enum.SystemExceptionJobStatus, enum.PushFailJobStatus},
+		"inStatus":  []int32{enum.PendingJobStatus, enum.DoingJobStatus, enum.SystemExceptionJobStatus, enum.PushTaskFailJobStatus},
 	})
 	if err != nil {
 		return nil, err

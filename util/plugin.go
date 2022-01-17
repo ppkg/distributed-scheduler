@@ -2,18 +2,18 @@ package util
 
 import "strings"
 
-func FindPluginPos(pluginSet string, plugin string) int {
-	for i, item := range strings.Split(pluginSet, ",") {
-		if item == plugin {
+func FindHandlerPos(nameSet string, name string) int {
+	for i, item := range strings.Split(nameSet, ",") {
+		if item == name {
 			return i
 		}
 	}
 	return -1
 }
 
-func IsSupportPlugin(pluginSet []string, plugin string) bool {
-	for _, item := range pluginSet {
-		if item == plugin {
+func IsSupportHandler(nameSet []string, name string) bool {
+	for _, item := range nameSet {
+		if item == name {
 			return true
 		}
 	}

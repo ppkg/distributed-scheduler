@@ -5,6 +5,7 @@ import (
 	"distributed-scheduler/dto"
 	"distributed-scheduler/enum"
 	"distributed-scheduler/model"
+	"distributed-scheduler/proto/job"
 	"distributed-scheduler/proto/task"
 	"distributed-scheduler/util"
 	"fmt"
@@ -33,8 +34,8 @@ type scheduleEngine struct {
 	// worker连接维护
 	workerConns *workerConnMap
 
-	// task任务队列
-	taskQueue chan func(worker WorkerNode)
+	// 分发队列
+	dispatchQueue chan func(worker WorkerNode)
 }
 
 func NewScheduler(workerThread int) *scheduleEngine {
@@ -45,7 +46,7 @@ func NewScheduler(workerThread int) *scheduleEngine {
 		jobNotifyIndexer:  NewWorkerIndexer(),
 		roundRobinMap:     make(map[string]*safeUint32),
 		workerConns:       NewWorkerConns(),
-		taskQueue:         make(chan func(worker WorkerNode), 100000000),
+		dispatchQueue:     make(chan func(worker WorkerNode), 100000000),
 	}
 	return engine
 }
@@ -73,7 +74,7 @@ loop:
 		select {
 		case <-closeCh:
 			break loop
-		case fn := <-s.taskQueue:
+		case fn := <-s.dispatchQueue:
 			err = pool.Submit(func() {
 				fn(worker)
 			})
@@ -82,7 +83,7 @@ loop:
 			}
 			// 如果task提交给worker线程池失败则重新入列
 			glog.Errorf("scheduleEngine/startWork worker节点(%s,%s)往线程池提交task失败,err:%+v", worker.NodeId, worker.Endpoint, err)
-			s.taskQueue <- fn
+			s.dispatchQueue <- fn
 		}
 	}
 	glog.Infof("scheduleEngine/startWork worker节点(%s,%s)停止工作", worker.NodeId, worker.Endpoint)
@@ -132,12 +133,12 @@ func (s *scheduleEngine) BatchUpdateWorkerIndex(list []WorkerNode) {
 func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error {
 	tryCount := 3
 	// 优先给自己worker执行,不过要先判断自己是否支持当前插件运行
-	if util.IsSupportPlugin(worker.PluginSet, task.Plugin) {
+	if util.IsSupportHandler(worker.PluginSet, task.Plugin) {
 		err := s.pushTask(worker, task)
 		if err == nil {
 			return nil
 		}
-		glog.Errorf("ScheduleEngine/processTask 优先给自己worker推送异常,worker:%s,taskId:%d,err:%+v", kit.JsonEncode(worker), task.Id, err)
+		glog.Errorf("ScheduleEngine/processTask 优先给自己worker推送task异常,worker:%s,taskId:%d,err:%+v", kit.JsonEncode(worker), task.Id, err)
 	} else {
 		tryCount = 4
 	}
@@ -193,17 +194,17 @@ func (s *scheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
 }
 
 // 优选worker工作节点
-func (s *scheduleEngine) preferWorker(plugin string, list []WorkerNode) WorkerNode {
-	pos := s.getAndIncr(plugin)
+func (s *scheduleEngine) preferWorker(name string, list []WorkerNode) WorkerNode {
+	pos := s.getAndIncr(name)
 	i := pos % uint32(len(list))
 	return list[i]
 }
 
-// 预选worker工作节点
-func (s *scheduleEngine) predicateWorker(plugin string) ([]WorkerNode, error) {
-	workers := s.pluginIndexer.ListWorker(plugin)
+// 为task预选worker工作节点
+func (s *scheduleEngine) predicateWorker(name string) ([]WorkerNode, error) {
+	workers := s.pluginIndexer.ListWorker(name)
 	if len(workers) == 0 {
-		return nil, fmt.Errorf("没有支持插件(%s)的worker可调度", plugin)
+		return nil, fmt.Errorf("没有支持插件(%s)的worker可调度", name)
 	}
 	return workers, nil
 }
@@ -283,7 +284,7 @@ func (s *scheduleEngine) DispatchTask(job *dto.JobInfo, tasks ...InputTask) {
 		return
 	}
 	for _, item := range tasks {
-		s.taskQueue <- s.buildTaskFunc(job, item)
+		s.dispatchQueue <- s.buildTaskFunc(job, item)
 	}
 }
 
@@ -314,7 +315,7 @@ func (s *scheduleEngine) buildTaskFunc(job *dto.JobInfo, task InputTask) func(wo
 				task.Task.Status = enum.ExceptionTaskStatus
 				task.Task.Output = errMsg
 				util.CancelNotify(task.Ctx, job, errMsg)
-				job.Job.Status = enum.PushFailJobStatus
+				job.Job.Status = enum.PushTaskFailJobStatus
 				glog.Error(errMsg)
 			}
 			task.Callback()
@@ -323,11 +324,76 @@ func (s *scheduleEngine) buildTaskFunc(job *dto.JobInfo, task InputTask) func(wo
 }
 
 // 分发job通知
-func (s *scheduleEngine) DispatchJobNotify(job *dto.JobInfo) {
+func (s *scheduleEngine) DispatchJobNotify(job *dto.JobInfo, callback func(job *dto.JobInfo, err error)) {
 	fn := func(worker WorkerNode) {
+		var err error
+		defer func() {
+			if err != nil {
+				callback(job, err)
+			}
+		}()
 
+		tryCount := 3
+		// 优先给自己worker执行,不过要先判断自己是否支持当前job通知类型
+		if util.IsSupportHandler(worker.JobNotifySet, job.Job.Type) {
+			err = s.pushJobNotify(worker, job)
+			if err == nil {
+				return
+			}
+			glog.Errorf("ScheduleEngine/DispatchJobNotify 优先给自己worker推送job回调通知异常,worker:%s,jobId:%d,err:%+v", kit.JsonEncode(worker), job.Job.Id, err)
+		} else {
+			tryCount = 4
+		}
+
+		// 自己worker执行失败则交给其他worker来执行
+		workers, err := s.predicateJobNotifyWorker(job.Job.Type)
+		if err != nil {
+			glog.Errorf("ScheduleEngine/DispatchJobNotify 预选worker节点异常,jobId:%d,err:%+v", job.Job.Id, err)
+			return
+		}
+
+		// 推送任务,如果推送失败则重推
+		for i := 0; i < tryCount; i++ {
+			myWorker := s.preferWorker(job.Job.Type, workers)
+			err = s.pushJobNotify(myWorker, job)
+			if err == nil {
+				return
+			}
+			glog.Errorf("ScheduleEngine/DispatchJobNotify 第%d次推送job回调通知异常,worker:%s,jobId:%d,err:%+v", i+1, kit.JsonEncode(myWorker), job.Job.Id, err)
+		}
 	}
-	s.taskQueue <- fn
+	s.dispatchQueue <- fn
+}
+
+// 推送job回调通知
+func (s *scheduleEngine) pushJobNotify(worker WorkerNode, j *dto.JobInfo) error {
+	conn, err := s.workerConns.Get(worker)
+	if err != nil {
+		return err
+	}
+
+	client := job.NewJobServiceClient(conn)
+	_, err = client.AsyncNotify(context.Background(), &job.AsyncNotifyRequest{
+		Id:     j.Job.Id,
+		Name:   j.Job.Name,
+		Type:   j.Job.Type,
+		Status: j.Job.Status,
+		Result: j.Job.Result,
+	})
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// 为task预选worker工作节点
+func (s *scheduleEngine) predicateJobNotifyWorker(name string) ([]WorkerNode, error) {
+	workers := s.jobNotifyIndexer.ListWorker(name)
+	if len(workers) == 0 {
+		return nil, fmt.Errorf("没有支持job回调通知(%s)的worker可调度", name)
+	}
+	return workers, nil
 }
 
 type workerPoolMap struct {

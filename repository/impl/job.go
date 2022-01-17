@@ -83,10 +83,16 @@ func (s jobRepositoryImpl) UpdateStatus(db *gorm.DB, data *model.Job) error {
 }
 
 // 更新通知状态
-func (s jobRepositoryImpl) UpdateNotifyStatus(db *gorm.DB, id int64, status int32) error {
-	err := db.Model(&model.Job{}).Where("id=?", id).Update("notify_status", status).Error
+func (s jobRepositoryImpl) UpdateNotifyStatus(db *gorm.DB, data *model.Job) error {
+	cols := []interface{}{
+		"message",
+	}
+	if data.NotifyStatus == enum.SuccessNotifyStatus {
+		data.Message = ""
+	}
+	err := db.Model(&model.Job{}).Where("id=?", data.Id).Select("notify_status", cols...).Updates(data).Error
 	if err != nil {
-		glog.Errorf("jobRepositoryImpl/UpdateNotifyStatus 更新job通知状态异常,id:%d,notifyStatus:%d,err:%+v", id, status, err)
+		glog.Errorf("jobRepositoryImpl/UpdateNotifyStatus 更新job通知状态异常,参数:%s,err:%+v", kit.JsonEncode(data), err)
 		return err
 	}
 	return nil

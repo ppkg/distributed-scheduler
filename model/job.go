@@ -24,6 +24,8 @@ type Job struct {
 	Size int32
 	// job运行结果
 	Result string
+	// job运行异常信息
+	Message string
 	// 创建时间
 	CreateTime time.Time `gorm:"->"`
 	// 完成时间

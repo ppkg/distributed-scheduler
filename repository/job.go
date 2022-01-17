@@ -16,5 +16,5 @@ type JobRepository interface {
 	// 更新job状态
 	UpdateStatus(db *gorm.DB, model *model.Job) error
 	// 更新通知状态
-	UpdateNotifyStatus(db *gorm.DB, id int64, status int32) error
+	UpdateNotifyStatus(db *gorm.DB, model *model.Job) error
 }
