@@ -193,6 +193,7 @@ func (s *ApplicationContext) Run() error {
 	// 监控raft身份变更并及时处理
 	go s.watchRaftLeader()
 
+	glog.Infof("调度器(%s)已启动,endpoint地址:%s", s.conf.AppName, s.getPeerAddr())
 	// 初始化grpc服务
 	err = s.doServe()
 	if err != nil {
