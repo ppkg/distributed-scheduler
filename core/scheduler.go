@@ -151,17 +151,30 @@ func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error 
 		return err
 	}
 
+	// 优选worker时排除掉调度出错的worker
+	excludeWorkers := []WorkerNode{worker}
 	// 推送任务,如果推送失败则重推
 	for i := 0; i < tryCount; i++ {
-		myWorker := s.preferWorker(task.Plugin, workers)
+		myWorker := s.preferWorker(task.Plugin, workers, excludeWorkers...)
 		err = s.pushTask(myWorker, task)
 		if err == nil {
 			return nil
 		}
+		excludeWorkers = s.appendExcludeWorker(excludeWorkers, myWorker)
 		glog.Errorf("ScheduleEngine/processTask 第%d次推送任务异常,worker:%s,taskId:%d,err:%+v", i+1, kit.JsonEncode(myWorker), task.Id, err)
 	}
 
 	return err
+}
+
+func (s *scheduleEngine) appendExcludeWorker(list []WorkerNode, worker WorkerNode) []WorkerNode {
+	for _, item := range list {
+		if item.NodeId == worker.NodeId {
+			return list
+		}
+	}
+	list = append(list, worker)
+	return list
 }
 
 // 推送任务给worker执行
@@ -195,10 +208,26 @@ func (s *scheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
 }
 
 // 优选worker工作节点
-func (s *scheduleEngine) preferWorker(name string, list []WorkerNode) WorkerNode {
+func (s *scheduleEngine) preferWorker(name string, list []WorkerNode, excludeWorkers ...WorkerNode) WorkerNode {
+	workerList := make([]WorkerNode, 0, len(list))
+	excludeMap := make(map[string]struct{})
+	for _, item := range excludeWorkers {
+		excludeMap[item.NodeId] = struct{}{}
+	}
+	for _, item := range list {
+		if _, ok := excludeMap[item.NodeId]; ok {
+			continue
+		}
+		workerList = append(workerList, item)
+	}
+
+	// 如果筛选不出符合规范worker则保持原有worker列表参与轮询
+	if len(workerList) == 0 {
+		workerList = list
+	}
 	pos := s.getAndIncr(name)
-	i := pos % uint32(len(list))
-	return list[i]
+	i := pos % uint32(len(workerList))
+	return workerList[i]
 }
 
 // 为task预选worker工作节点
