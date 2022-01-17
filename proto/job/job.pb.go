@@ -145,7 +145,7 @@ type AsyncNotifyRequest struct {
 	Id int64 `protobuf:"varint,1,opt,name=Id,proto3" json:"Id"`
 	// job名称
 	Name string `protobuf:"bytes,2,opt,name=Name,proto3" json:"Name"`
-	// job类型,根据不同值执行对应业务逻辑
+	// job类型,异步回调通知时使用，根据不同值执行对应业务
 	Type string `protobuf:"bytes,3,opt,name=Type,proto3" json:"Type"`
 	// job状态,2：执行完成，3：取消执行，4：系统异常，5：task推送失败，6：运行超时，7：业务处理异常
 	Status int32 `protobuf:"varint,4,opt,name=status,proto3" json:"status"`

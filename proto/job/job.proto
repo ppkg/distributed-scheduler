@@ -36,7 +36,7 @@ message AsyncNotifyRequest {
   int64 Id = 1;
   // job名称
   string Name = 2;
-  // job类型,根据不同值执行对应业务逻辑
+  // job类型,异步回调通知时使用，根据不同值执行对应业务
   string Type = 3;
   // job状态,2：执行完成，3：取消执行，4：系统异常，5：task推送失败，6：运行超时，7：业务处理异常
   int32 status = 4;
