@@ -198,7 +198,6 @@ func (s *scheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
 	})
 
 	if err != nil {
-		t.Status = enum.ExceptionTaskStatus
 		return err
 	}
 
@@ -410,6 +409,7 @@ func (s *scheduleEngine) pushJobNotify(worker WorkerNode, j *dto.JobInfo) error 
 		Type:   j.Job.Type,
 		Status: j.Job.Status,
 		Result: j.Job.Result,
+		Mesage: j.Job.Message,
 	})
 
 	if err != nil {
