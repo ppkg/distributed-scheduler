@@ -55,7 +55,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	// 构建task并移交给scheduler调度器来调度
 	pluginSet := strings.Split(jobInfo.Job.PluginSet, ",")
 	taskList := s.filterPendingTask(ctx, jobInfo, 0, pluginSet)
-	s.Scheduler.Put(jobInfo, s.buildTasks(ctx, jobInfo, taskList)...)
+	s.Scheduler.DispatchTask(jobInfo, s.buildTasks(ctx, jobInfo, taskList)...)
 
 	for range jobInfo.Done {
 		endTasks := jobInfo.FilterFinishEndTask()
@@ -97,7 +97,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 
 	// 如果是异步job并且需要通知则推送通知
 	if jobInfo.Job.IsAsync == 1 && jobInfo.Job.IsNotify == 1 {
-		s.Scheduler.DispatchNotify(jobInfo)
+		s.Scheduler.DispatchJobNotify(jobInfo)
 	}
 	return nil
 }
@@ -207,7 +207,7 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 		}
 		job.AppendSafeTask(newTask)
 		// 调度新的task
-		s.Scheduler.Put(job, s.buildTasks(ctx, job, []*model.Task{newTask})...)
+		s.Scheduler.DispatchTask(job, s.buildTasks(ctx, job, []*model.Task{newTask})...)
 	}
 }
 

@@ -87,7 +87,6 @@ func (s *ApplicationContext) watchRaftLeader() {
 			job.Job.Job.Status = enum.SystemExceptionJobStatus
 		}
 		s.jobContainer.RemoveAll()
-		s.Scheduler.NotifyChannel.RemoveAll()
 	}
 }
 
@@ -209,9 +208,10 @@ func (s *ApplicationContext) pullAllWorker() {
 	nodeList := make([]WorkerNode, 0, len(list))
 	for _, item := range list {
 		nodeList = append(nodeList, WorkerNode{
-			NodeId:    item.Metadata["nodeId"],
-			Endpoint:  fmt.Sprintf("%s:%d", item.Ip, item.Port),
-			PluginSet: strings.Split(item.Metadata["pluginSet"], ","),
+			NodeId:       item.Metadata["nodeId"],
+			Endpoint:     fmt.Sprintf("%s:%d", item.Ip, item.Port),
+			PluginSet:    strings.Split(item.Metadata["pluginSet"], ","),
+			JobNotifySet: strings.Split(item.Metadata["jobNotifySet"], ","),
 		})
 	}
 	s.Scheduler.BatchUpdateWorkerIndex(nodeList)

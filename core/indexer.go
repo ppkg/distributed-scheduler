@@ -7,43 +7,62 @@ import (
 // worker缓存组件
 type workerIndexer struct {
 	lock    sync.RWMutex
-	plugins map[string]nodeIdSet
+	data    map[string]hashSet
 	workers workerMap
 }
 
-func (s *workerIndexer) AddWorker(worker WorkerNode) {
+func (s *workerIndexer) AddWorker(worker WorkerNode, keySet []string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	s.workers[worker.NodeId] = worker
 
-	for _, plugin := range worker.PluginSet {
-		val, ok := s.plugins[plugin]
+	for _, key := range keySet {
+		val, ok := s.data[key]
 		if !ok {
-			val = make(nodeIdSet)
+			val = make(hashSet)
 		}
 		val[worker.NodeId] = struct{}{}
-		s.plugins[plugin] = val
+		s.data[key] = val
 	}
 }
 
-func (s *workerIndexer) RemoveWorker(worker WorkerNode) {
+func (s *workerIndexer) RemoveWorker(nodeId string, keySet []string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if _, ok := s.workers[worker.NodeId]; !ok {
+	if _, ok := s.workers[nodeId]; !ok {
 		return
 	}
-	delete(s.workers, worker.NodeId)
-	for _, plugin := range worker.PluginSet {
-		if val, ok := s.plugins[plugin]; ok {
+	delete(s.workers, nodeId)
+	for _, key := range keySet {
+		if val, ok := s.data[key]; ok {
+			delete(val, nodeId)
+		}
+	}
+}
+
+func (s *workerIndexer) UpdateWorker(worker WorkerNode, newKeySet, delKeySet []string) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.workers[worker.NodeId] = worker
+	for _, key := range delKeySet {
+		if val, ok := s.data[key]; ok {
 			delete(val, worker.NodeId)
 		}
 	}
+	for _, key := range newKeySet {
+		val, ok := s.data[key]
+		if !ok {
+			val = make(hashSet)
+		}
+		val[worker.NodeId] = struct{}{}
+		s.data[key] = val
+	}
 }
 
-func (s *workerIndexer) GetPluginWorker(pluginKey string) []WorkerNode {
+func (s *workerIndexer) ListWorker(key string) []WorkerNode {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-	nodeIds, ok := s.plugins[pluginKey]
+	nodeIds, ok := s.data[key]
 	if !ok {
 		return nil
 	}
@@ -77,15 +96,17 @@ type WorkerNode struct {
 	Endpoint string
 	// 工作节点支持插件集合,多个以","隔开
 	PluginSet []string
+	// 工作节点支持job回调通知，多个以","隔开
+	JobNotifySet []string
 }
 
 type workerMap map[string]WorkerNode
 
-type nodeIdSet map[string]struct{}
+type hashSet map[string]struct{}
 
 func NewWorkerIndexer() *workerIndexer {
 	return &workerIndexer{
-		plugins: make(map[string]nodeIdSet),
+		data:    make(map[string]hashSet),
 		workers: make(workerMap),
 	}
 }

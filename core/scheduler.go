@@ -19,10 +19,12 @@ import (
 
 // 调度引擎
 type scheduleEngine struct {
-	// worker节点缓存器
-	workerIndexer *workerIndexer
-	lock          sync.RWMutex
-	roundRobinMap map[string]*safeUint32
+	// worker节点所支持plugin插件索引组件
+	pluginIndexer *workerIndexer
+	// worker节点所支持job回调通知索引组件
+	jobNotifyIndexer *workerIndexer
+	lock             sync.RWMutex
+	roundRobinMap    map[string]*safeUint32
 
 	// worker调度器线程数
 	workerThreadCount int
@@ -33,26 +35,24 @@ type scheduleEngine struct {
 
 	// task任务队列
 	taskQueue chan func(worker WorkerNode)
-
-	// 异步通知渠道
-	NotifyChannel *workerNotifyChannel
 }
 
 func NewScheduler(workerThread int) *scheduleEngine {
 	engine := &scheduleEngine{
 		workerThreadCount: workerThread,
 		workerPools:       NewWorkerPools(),
-		workerIndexer:     NewWorkerIndexer(),
+		pluginIndexer:     NewWorkerIndexer(),
+		jobNotifyIndexer:  NewWorkerIndexer(),
 		roundRobinMap:     make(map[string]*safeUint32),
 		workerConns:       NewWorkerConns(),
-		NotifyChannel:     NewWorkerNotifyChannel(),
 		taskQueue:         make(chan func(worker WorkerNode), 100000000),
 	}
 	return engine
 }
 
 func (s *scheduleEngine) AddWorker(worker WorkerNode) error {
-	s.workerIndexer.AddWorker(worker)
+	s.pluginIndexer.AddWorker(worker, worker.PluginSet)
+	s.jobNotifyIndexer.AddWorker(worker, worker.JobNotifySet)
 	err := s.workerPools.Put(worker, s.workerThreadCount)
 	if err != nil {
 		glog.Errorf("scheduleEngine/AddWorker %v", err)
@@ -89,32 +89,31 @@ loop:
 }
 
 func (s *scheduleEngine) RemoveWorker(worker WorkerNode) {
-	s.workerIndexer.RemoveWorker(worker)
+	s.pluginIndexer.RemoveWorker(worker.NodeId, worker.PluginSet)
+	s.jobNotifyIndexer.RemoveWorker(worker.NodeId, worker.JobNotifySet)
 	s.workerPools.Remove(worker)
-	s.NotifyChannel.RemoveAndCloseChannel(worker.NodeId)
-}
-
-// 更新worker索引
-func (s *scheduleEngine) UpdateWorkerIndex(worker WorkerNode) {
-	s.workerIndexer.RemoveWorker(worker)
-	s.workerIndexer.AddWorker(worker)
 }
 
 // 批量更新worker索引
 func (s *scheduleEngine) BatchUpdateWorkerIndex(list []WorkerNode) {
 	for _, item := range list {
-		worker, ok := s.workerIndexer.GetWorker(item.NodeId)
+		worker, ok := s.pluginIndexer.GetWorker(item.NodeId)
 		if !ok {
 			_ = s.AddWorker(item)
 			continue
 		}
-		// 如果worker支持的插件没有变化则跳过
-		if util.EqualStringSlice(worker.PluginSet, item.PluginSet) {
-			continue
+		// 如果worker支持的插件有变化则需要更新索引
+		if !util.EqualStringSlice(worker.PluginSet, item.PluginSet) {
+			s.pluginIndexer.UpdateWorker(item, item.PluginSet, worker.PluginSet)
 		}
-		s.UpdateWorkerIndex(item)
+
+		// 如果worker支持的job回调通知有变化则需要更新索引
+		if !util.EqualStringSlice(worker.JobNotifySet, item.JobNotifySet) {
+			s.jobNotifyIndexer.UpdateWorker(item, item.JobNotifySet, worker.JobNotifySet)
+		}
+
 	}
-	for _, worker := range s.workerIndexer.GetAllWorker() {
+	for _, worker := range s.pluginIndexer.GetAllWorker() {
 		isFound := false
 		for _, item := range list {
 			if worker.NodeId == item.NodeId {
@@ -202,7 +201,7 @@ func (s *scheduleEngine) preferWorker(plugin string, list []WorkerNode) WorkerNo
 
 // 预选worker工作节点
 func (s *scheduleEngine) predicateWorker(plugin string) ([]WorkerNode, error) {
-	workers := s.workerIndexer.GetPluginWorker(plugin)
+	workers := s.pluginIndexer.ListWorker(plugin)
 	if len(workers) == 0 {
 		return nil, fmt.Errorf("没有支持插件(%s)的worker可调度", plugin)
 	}
@@ -279,17 +278,17 @@ func (s *scheduleEngine) getAndIncr(key string) uint32 {
 }
 
 // 添加需要调度的task
-func (s *scheduleEngine) Put(job *dto.JobInfo, tasks ...InputTask) {
+func (s *scheduleEngine) DispatchTask(job *dto.JobInfo, tasks ...InputTask) {
 	if len(tasks) == 0 {
 		return
 	}
 	for _, item := range tasks {
-		s.taskQueue <- s.buildQueueFunc(job, item)
+		s.taskQueue <- s.buildTaskFunc(job, item)
 	}
 }
 
 // 构建task队列入参
-func (s *scheduleEngine) buildQueueFunc(job *dto.JobInfo, task InputTask) func(worker WorkerNode) {
+func (s *scheduleEngine) buildTaskFunc(job *dto.JobInfo, task InputTask) func(worker WorkerNode) {
 	return func(worker WorkerNode) {
 		defer func() {
 			if panic := recover(); panic != nil {
@@ -324,22 +323,11 @@ func (s *scheduleEngine) buildQueueFunc(job *dto.JobInfo, task InputTask) func(w
 }
 
 // 分发job通知
-func (s *scheduleEngine) DispatchNotify(job *dto.JobInfo) {
-	defer func() {
-		if panic := recover(); panic != nil {
-			glog.Errorf("scheduleEngine/DispatchNotify 分发job(%d,%s)通知panic:%+v", job.Job.Id, job.Job.Name, panic)
-		}
-	}()
-	list := s.NotifyChannel.GetAll()
-	if len(list) == 0 {
-		glog.Errorf("scheduleEngine/DispatchNotify 分发job(%d,%s)通知时找不到任何worker订阅通知", job.Job.Id, job.Job.Name)
-		return
-	}
+func (s *scheduleEngine) DispatchJobNotify(job *dto.JobInfo) {
+	fn := func(worker WorkerNode) {
 
-	pos := s.getAndIncr("systemWorkerNotify")
-	i := pos % uint32(len(list))
-	channel := list[i]
-	channel <- job
+	}
+	s.taskQueue <- fn
 }
 
 type workerPoolMap struct {
