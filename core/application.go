@@ -539,7 +539,7 @@ func (s *ApplicationContext) watchSchedulerService() error {
 				// 当服务不正常则从raft集群移除
 				err := s.RemovePeer(string(item.ID))
 				if err != nil {
-					glog.Errorf("Application/watchServiceDiscovery 当前节点:%s，移除节点信息:%s，移除raft节点失败:%v", s.conf.Raft.NodeId, kit.JsonEncode(item), err)
+					glog.Errorf("Application/watchSchedulerService 当前节点:%s，移除节点信息:%s，移除raft节点失败:%v", s.conf.Raft.NodeId, kit.JsonEncode(item), err)
 				}
 			}
 
@@ -553,11 +553,11 @@ func (s *ApplicationContext) watchSchedulerService() error {
 				}
 				err := s.AddPeer(item.Metadata["nodeId"], fmt.Sprintf("%s:%d", item.Ip, item.Port))
 				if err != nil {
-					glog.Errorf("Application/watchServiceDiscovery 当前节点:%s，新增节点信息:%s，添加raft节点失败:%v", s.conf.Raft.NodeId, kit.JsonEncode(item), err)
+					glog.Errorf("Application/watchSchedulerService 当前节点:%s，新增节点信息:%s，添加raft节点失败:%v", s.conf.Raft.NodeId, kit.JsonEncode(item), err)
 				}
 			}
 
-			glog.Infof("Application/watchServiceDiscovery 当前节点:%s,raft集群状态:%s", s.conf.Raft.NodeId, kit.JsonEncode(s.raft.GetConfiguration().Configuration().Servers))
+			glog.Infof("Application/watchSchedulerService 当前节点:%s,raft集群状态:%s", s.conf.Raft.NodeId, kit.JsonEncode(s.raft.GetConfiguration().Configuration().Servers))
 		},
 	})
 }
