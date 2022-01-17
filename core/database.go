@@ -12,7 +12,7 @@ import (
 
 func (s *ApplicationContext) initDatabase() error {
 	var err error
-	s.Db, err = gorm.Open(mysql.Open(config.GetString("mysql.github.com/ppkg/distributed-scheduler")), &gorm.Config{
+	s.Db, err = gorm.Open(mysql.Open(config.GetString("mysql.distributed-scheduler")), &gorm.Config{
 		Logger: gormlog.Default.LogMode(gormlog.Info),
 	})
 	if err != nil {
