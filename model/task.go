@@ -19,6 +19,8 @@ type Task struct {
 	Input string
 	// 输出参数
 	Output string
+	// job运行异常信息
+	Message string
 	// 分配执行节点ID
 	NodeId string
 	// 分配执行节点端点

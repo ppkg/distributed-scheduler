@@ -68,31 +68,16 @@ func (s jobRepositoryImpl) List(db *gorm.DB, params map[string]interface{}) ([]*
 
 // 更新job状态
 func (s jobRepositoryImpl) UpdateStatus(db *gorm.DB, data *model.Job) error {
-	cols := []interface{}{
-		"result",
-	}
+	cols := []interface{}{}
 	if data.Status == enum.FinishJobStatus {
-		cols = append(cols, "finish_time")
+		cols = append(cols, "result", "finish_time")
+	}
+	if data.Status == enum.CancelJobStatus || data.Status == enum.SystemExceptionJobStatus || data.Status == enum.PushTaskExceptionJobStatus || data.Status == enum.RunningTimeoutJobStatus || data.Status == enum.BusinessExceptionJobStatus {
+		cols = append(cols, "message")
 	}
 	err := db.Model(&model.Job{}).Where("id=?", data.Id).Select("status", cols...).Updates(data).Error
 	if err != nil {
 		glog.Errorf("jobRepositoryImpl/UpdateStatus 更新job状态异常,参数:%s,err:%+v", kit.JsonEncode(data), err)
-		return err
-	}
-	return nil
-}
-
-// 更新通知状态
-func (s jobRepositoryImpl) UpdateNotifyStatus(db *gorm.DB, data *model.Job) error {
-	cols := []interface{}{
-		"message",
-	}
-	if data.NotifyStatus == enum.SuccessNotifyStatus {
-		data.Message = ""
-	}
-	err := db.Model(&model.Job{}).Where("id=?", data.Id).Select("notify_status", cols...).Updates(data).Error
-	if err != nil {
-		glog.Errorf("jobRepositoryImpl/UpdateNotifyStatus 更新job通知状态异常,参数:%s,err:%+v", kit.JsonEncode(data), err)
 		return err
 	}
 	return nil

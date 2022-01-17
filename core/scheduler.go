@@ -204,6 +204,7 @@ func (s *scheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
 
 	t.Status = resp.Status
 	t.Output = resp.Result
+	t.Message = resp.Message
 	return nil
 }
 
@@ -325,7 +326,7 @@ func (s *scheduleEngine) buildTaskFunc(job *dto.JobInfo, task InputTask) func(wo
 			if panic := recover(); panic != nil {
 				errMsg := fmt.Sprintf("运行task(%d,%s) panic:%+v,trace:%s", task.Task.Id, task.Task.Name, panic, util.PanicTrace(10))
 				task.Task.Status = enum.ExceptionTaskStatus
-				task.Task.Output = errMsg
+				task.Task.Message = errMsg
 				util.CancelNotify(task.Ctx, job, errMsg)
 				job.Job.Status = enum.SystemExceptionJobStatus
 				glog.Error(errMsg)
@@ -343,9 +344,9 @@ func (s *scheduleEngine) buildTaskFunc(job *dto.JobInfo, task InputTask) func(wo
 				// 推送失败
 				errMsg := fmt.Sprintf("推送task(%d,%s)失败,err:%+v", task.Task.Id, task.Task.Name, err)
 				task.Task.Status = enum.ExceptionTaskStatus
-				task.Task.Output = errMsg
+				task.Task.Message = errMsg
 				util.CancelNotify(task.Ctx, job, errMsg)
-				job.Job.Status = enum.PushTaskFailJobStatus
+				job.Job.Status = enum.PushTaskExceptionJobStatus
 				glog.Error(errMsg)
 			}
 			task.Callback()

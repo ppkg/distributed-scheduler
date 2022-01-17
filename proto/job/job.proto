@@ -38,7 +38,7 @@ message AsyncNotifyRequest {
   string Name = 2;
   // job类型,异步回调通知时使用，根据不同值执行对应业务
   string Type = 3;
-  // job状态,2：执行完成，3：取消执行，4：系统异常，5：task推送失败，6：运行超时，7：业务处理异常
+  // job状态,2：执行完成，3：取消执行，4：系统异常，5：task推送失败，6：运行超时，7：业务处理异常，8：回调通知异常
   int32 status = 4;
   // 结果输出
   string result = 5;

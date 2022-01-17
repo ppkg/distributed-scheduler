@@ -61,7 +61,7 @@ func (s *JobInfo) Reduce() (string, error) {
 		var output interface{}
 		err = json.Unmarshal([]byte(task.Output), &output)
 		if err != nil {
-			return "", fmt.Errorf("反序列化异常,data:%s,err:%+v", task.Output, err)
+			return "", fmt.Errorf("JobInfo/Reduce 反序列化异常,data:%s,err:%+v", task.Output, err)
 		}
 		switch rs := output.(type) {
 		case []interface{}:

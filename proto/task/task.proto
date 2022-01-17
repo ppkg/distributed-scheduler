@@ -22,8 +22,10 @@ message SubmitRequest {
 message SyncSubmitResponse {
   int64 Id = 1;
   int64 JobId = 2;
-  // task状态,1：执行中，2：执行完成，3：异常退出
+  // task状态,2：执行完成，3：异常退出
   int32 status = 3;
   // 处理结果
   string Result = 4;
+  // 异常信息
+  string Message = 5;
 }

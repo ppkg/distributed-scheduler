@@ -15,6 +15,4 @@ type JobRepository interface {
 	List(db *gorm.DB, params map[string]interface{}) ([]*model.Job, error)
 	// 更新job状态
 	UpdateStatus(db *gorm.DB, model *model.Job) error
-	// 更新通知状态
-	UpdateNotifyStatus(db *gorm.DB, model *model.Job) error
 }

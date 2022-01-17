@@ -50,7 +50,6 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 
 	// job状态改为进行中
 	jobInfo.Job.Status = enum.DoingJobStatus
-	jobInfo.Job.Result = ""
 	_ = s.jobRepo.UpdateStatus(s.Db, jobInfo.Job)
 
 	// 构建task并移交给scheduler调度器来调度
@@ -75,7 +74,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	// 记录取消原因
 	switch cancelParam.State {
 	case enum.ExceptionCancelState:
-		jobInfo.Job.Result = cancelParam.Reason
+		jobInfo.Job.Message = cancelParam.Reason
 	}
 
 	// 如果job是已完成状态则进行合并结果
@@ -101,17 +100,13 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 		s.Scheduler.DispatchJobNotify(jobInfo, func(job *dto.JobInfo, err error) {
 			var myErr error
 			if err == nil {
-				job.Job.NotifyStatus = enum.SuccessNotifyStatus
-				myErr = s.jobRepo.UpdateNotifyStatus(s.Db, job.Job)
-				if myErr != nil {
-					glog.Errorf("ApplicationContext/StartJob 推送job回调通知异常,id:%d,err:%+v", job.Job.Id, myErr)
-				}
+				glog.Infof("ApplicationContext/StartJob 推送job回调通知成功,id:%d,name:%s", job.Job.Id, job.Job.Name)
 				return
 			}
 
-			job.Job.NotifyStatus = enum.FailNotifyStatus
+			job.Job.Status = enum.NotifyExceptionJobStatus
 			job.Job.Message = err.Error()
-			myErr = s.jobRepo.UpdateNotifyStatus(s.Db, job.Job)
+			myErr = s.jobRepo.UpdateStatus(s.Db, job.Job)
 			if myErr != nil {
 				glog.Errorf("ApplicationContext/StartJob 推送job回调通知异常,id:%d,err:%+v", job.Job.Id, myErr)
 			}
@@ -178,8 +173,6 @@ func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.Job
 // 任务执行完回调通知
 func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo, task *model.Task) func() {
 	return func() {
-		glog.Infof("当前任务执行结果,name:%s,id:%d,jobId:%d,status:%d(%s),nodeId:%s,plugin:%s,output:%s,input:%s", task.Name, task.Id, task.JobId, task.Status, enum.TaskStatusMap[task.Status], task.NodeId, task.Plugin, task.Output, task.Input)
-
 		// 保存任务状态
 		task.FinishTime = time.Now()
 		err := s.taskRepo.UpdateStatus(s.Db, task)
@@ -192,7 +185,7 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 
 		// 判断任务是否执行异常，异常则通知其他task停止执行
 		if task.Status != enum.FinishTaskStatus {
-			util.CancelNotify(ctx, job, fmt.Sprintf("task(%d,%s)业务处理失败,%s", task.Id, task.Name, task.Output))
+			util.CancelNotify(ctx, job, fmt.Sprintf("task(%d,%s)业务处理失败,%s", task.Id, task.Name, task.Message))
 			job.Job.Status = enum.BusinessExceptionJobStatus
 			return
 		}
@@ -281,7 +274,7 @@ func (s *ApplicationContext) loadUndoneAsyncJob() ([]*dto.JobInfo, error) {
 		"startTime": startTime,
 		"endTime":   endTime,
 		"isAsync":   1,
-		"inStatus":  []int32{enum.PendingJobStatus, enum.DoingJobStatus, enum.SystemExceptionJobStatus, enum.PushTaskFailJobStatus},
+		"inStatus":  []int32{enum.PendingJobStatus, enum.DoingJobStatus, enum.SystemExceptionJobStatus, enum.PushTaskExceptionJobStatus},
 	})
 	if err != nil {
 		return nil, err
