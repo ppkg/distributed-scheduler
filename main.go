@@ -14,18 +14,18 @@ import (
 )
 
 var (
-	port   = flag.Int("port", 50051, "TCP port for this node")
-	raftId = flag.String("raft_id", "", "Node id used by Raft")
+	port   = flag.Int("port", 5001, "TCP port for this node")
+	nodeId = flag.String("nodeId", "", "Node id used by Raft")
 )
 
 func main() {
 	flag.Parse()
 
-	if *raftId == "" {
-		log.Fatalf("flag --raft_id is required")
+	if *nodeId == "" {
+		log.Fatalf("flag --nodeId is required")
 	}
 
-	app := core.NewApp(core.WithAppNameOption("distributed-scheduler"), core.WithNacosAddrOption("mse-e52dbdd6-p.nacos-ans.mse.aliyuncs.com:8848"), core.WithNacosNamespaceOption("27fdefc2-ae39-41fd-bac4-9256acbf97bc"), core.WithNacosServiceGroupOption("my-service"), core.WithPortOption(*port), core.WithNodeIdOption(*raftId), core.WithSchedulerThreadOption(10)).RegisterGrpc(func(ctx *core.ApplicationContext, server *grpc.Server) {
+	app := core.NewApp(core.WithAppNameOption("distributed-scheduler"), core.WithNacosAddrOption("mse-e52dbdd6-p.nacos-ans.mse.aliyuncs.com:8848"), core.WithNacosNamespaceOption("27fdefc2-ae39-41fd-bac4-9256acbf97bc"), core.WithNacosServiceGroupOption("my-service"), core.WithPortOption(*port), core.WithNodeIdOption(*nodeId), core.WithSchedulerThreadOption(10)).RegisterGrpc(func(ctx *core.ApplicationContext, server *grpc.Server) {
 		node.RegisterNodeServiceServer(server, service.NewNodeService(ctx))
 	}).RegisterGrpc(func(ctx *core.ApplicationContext, server *grpc.Server) {
 		job.RegisterJobServiceServer(server, service.NewJobService(ctx))
@@ -33,6 +33,6 @@ func main() {
 
 	err := app.Run()
 	if err != nil {
-		fmt.Println("got err:", err)
+		fmt.Println("start server but got err:", err)
 	}
 }
