@@ -57,14 +57,10 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	taskList := s.filterPendingTask(ctx, jobInfo, 0, pluginSet)
 	s.Scheduler.DispatchTask(jobInfo, s.buildTasks(ctx, jobInfo, taskList)...)
 
-	for range jobInfo.Done {
-		endTasks := jobInfo.FilterFinishEndTask()
-		if jobInfo.Job.Size == int32(len(endTasks)) {
-			jobInfo.Job.Status = enum.FinishJobStatus
-			break
-		}
-	}
-	if cancelParam.State == enum.NormalRuningState && jobInfo.Job.Status != enum.FinishJobStatus {
+	// 阻塞等待所有task执行完毕
+	jobInfo.DoneLatch.Wait()
+	// 判断是否task都执行完毕，如果是则改为已完成状态
+	if cancelParam.State == enum.NormalRuningState {
 		endTasks := jobInfo.FilterFinishEndTask()
 		if jobInfo.Job.Size == int32(len(endTasks)) {
 			jobInfo.Job.Status = enum.FinishJobStatus
@@ -207,7 +203,7 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 
 		// 如果最后一个插件处理完毕就直接返回
 		if pos == len(strings.Split(job.Job.PluginSet, ","))-1 {
-			job.Done <- 1
+			job.DoneLatch.Done()
 			return
 		}
 

@@ -11,7 +11,7 @@ import (
 )
 
 type JobInfo struct {
-	Done     chan int
+	DoneLatch     *CountDownLatch
 	Job      *model.Job
 	TaskList []*model.Task
 	lock     sync.Mutex
@@ -23,10 +23,7 @@ type JobInfo struct {
 func (s *JobInfo) InitDoneChannel() {
 	finishTask := s.FilterFinishEndTask()
 	cacheSize := int(s.Job.Size) - len(finishTask)
-	s.Done = make(chan int, cacheSize)
-	if cacheSize == 0 {
-		close(s.Done)
-	}
+	s.DoneLatch=NewCountDownLatch(cacheSize)
 }
 
 // 过滤出已完成最后task
