@@ -269,16 +269,27 @@ func (s *ApplicationContext) restartUndoneAsyncJob() {
 		glog.Errorf("ApplicationContext/restartUndoneAsyncJob 加载未完成异步job异常,err:%+v", err)
 		return
 	}
-	if len(list) == 0 {
+
+	myList := make([]*dto.JobInfo, 0, len(list))
+	for _, item := range list {
+		// 如果job在容器中执行了则跳过
+		if _, ok := s.jobContainer.Get(item.Job.Id); ok {
+			continue
+		}
+		myList = append(myList, item)
+	}
+
+	if len(myList) == 0 {
 		return
 	}
+
 	var logSlice []string
-	for _, item := range list {
+	for _, item := range myList {
 		logSlice = append(logSlice, fmt.Sprintf("%d->%s", item.Job.Id, item.Job.Name))
 	}
-	glog.Infof("ApplicationContext/restartUndoneAsyncJob 共有%d个job重启,分别是:%s", len(list), strings.Join(logSlice, ","))
+	glog.Infof("ApplicationContext/restartUndoneAsyncJob 共有%d个job重启,分别是:%s", len(myList), strings.Join(logSlice, ","))
 
-	for _, item := range list {
+	for _, item := range myList {
 		go func(job *dto.JobInfo) {
 			_ = s.StartJob(job)
 		}(item)
