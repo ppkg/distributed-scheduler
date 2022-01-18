@@ -71,8 +71,8 @@ func (s *ApplicationContext) watchRaftLeader() {
 		if isLeader {
 			s.updateCurrentNacosRole(enum.LeaderRaftRole)
 			glog.Infof("ApplicationContext/watchRaftLeader 当前raft节点(%s,%s)获取leader身份", s.conf.Raft.NodeId, s.getPeerAddr())
-			time.AfterFunc(3*time.Minute, func() {
-				// 3分钟后检查是否满足重启job条件
+			time.AfterFunc(time.Minute, func() {
+				// 1分钟后检查是否满足重启job条件
 				if !s.IsLeaderNode() {
 					return
 				}
