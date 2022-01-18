@@ -389,6 +389,7 @@ func (s *scheduleEngine) DispatchJobNotify(job *dto.JobInfo, callback func(job *
 			if err == nil {
 				return
 			}
+			err = fmt.Errorf("重试推送3次job回调通知异常,最后一次推送worker(%s,%s),err:%+v", myWorker.NodeId, myWorker.Endpoint, err)
 			glog.Errorf("ScheduleEngine/DispatchJobNotify 第%d次推送job回调通知异常,worker:%s,jobId:%d,err:%+v", i+1, kit.JsonEncode(myWorker), job.Job.Id, err)
 		}
 	}

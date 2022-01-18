@@ -100,11 +100,17 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 				return
 			}
 
+			// 如果在推送出错前已经存在报错则不更改job状态及message信息
+			if job.Job.Status != enum.FinishJobStatus {
+				glog.Errorf("ApplicationContext/StartJob 推送job回调通知异常,id:%d,err:%+v", job.Job.Id, myErr)
+				return
+			}
+
 			job.Job.Status = enum.NotifyExceptionJobStatus
 			job.Job.Message = err.Error()
 			myErr = s.jobRepo.UpdateStatus(s.Db, job.Job)
 			if myErr != nil {
-				glog.Errorf("ApplicationContext/StartJob 推送job回调通知异常,id:%d,err:%+v", job.Job.Id, myErr)
+				glog.Errorf("ApplicationContext/StartJob job回调通知->更新job状态异常,id:%d,err:%+v", job.Job.Id, myErr)
 			}
 		})
 	}

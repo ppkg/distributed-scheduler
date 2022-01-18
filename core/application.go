@@ -23,7 +23,6 @@ import (
 	configClient "github.com/nacos-group/nacos-sdk-go/clients/config_client"
 	namingClient "github.com/nacos-group/nacos-sdk-go/clients/naming_client"
 	"github.com/nacos-group/nacos-sdk-go/common/constant"
-	"github.com/nacos-group/nacos-sdk-go/model"
 	nacosModel "github.com/nacos-group/nacos-sdk-go/model"
 	"github.com/nacos-group/nacos-sdk-go/vo"
 	"github.com/ppkg/glog"
@@ -501,7 +500,7 @@ func (s *ApplicationContext) watchWorkerService() error {
 		Clusters: []string{
 			s.conf.Nacos.ClusterName,
 		},
-		SubscribeCallback: func(services []model.SubscribeService, nacosErr error) {
+		SubscribeCallback: func(services []nacosModel.SubscribeService, nacosErr error) {
 			if !s.IsLeaderNode() {
 				return
 			}
@@ -518,7 +517,7 @@ func (s *ApplicationContext) watchSchedulerService() error {
 		Clusters: []string{
 			s.conf.Nacos.ClusterName,
 		},
-		SubscribeCallback: func(services []model.SubscribeService, nacosErr error) {
+		SubscribeCallback: func(services []nacosModel.SubscribeService, nacosErr error) {
 			if !s.IsLeaderNode() {
 				return
 			}
