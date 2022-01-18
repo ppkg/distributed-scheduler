@@ -27,6 +27,8 @@ type Task struct {
 	Endpoint string
 	// 创建时间
 	CreateTime time.Time `gorm:"->"`
+	// 更新时间
+	UpdateTime time.Time `gorm:"->"`
 	// 完成时间
 	FinishTime time.Time
 }

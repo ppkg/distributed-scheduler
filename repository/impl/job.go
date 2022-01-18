@@ -15,7 +15,7 @@ type jobRepositoryImpl struct {
 
 // 保存job信息
 func (s jobRepositoryImpl) Save(db *gorm.DB, model *model.Job) error {
-	err := db.Create(model).Error
+	err := db.Omit("result","message","finish_time").Create(model).Error
 	if err != nil {
 		glog.Errorf("jobRepositoryImpl/Save 保存job信息异常,err:%+v", err)
 		return err
@@ -72,7 +72,7 @@ func (s jobRepositoryImpl) UpdateStatus(db *gorm.DB, data *model.Job) error {
 	if data.Status == enum.FinishJobStatus {
 		cols = append(cols, "result", "finish_time")
 	}
-	if data.Status == enum.CancelJobStatus || data.Status == enum.SystemExceptionJobStatus || data.Status == enum.PushTaskExceptionJobStatus || data.Status == enum.RunningTimeoutJobStatus || data.Status == enum.BusinessExceptionJobStatus {
+	if data.Status == enum.CancelJobStatus || data.Status == enum.SystemExceptionJobStatus || data.Status == enum.PushTaskExceptionJobStatus || data.Status == enum.RunningTimeoutJobStatus || data.Status == enum.BusinessExceptionJobStatus|| data.Status == enum.NotifyExceptionJobStatus {
 		cols = append(cols, "message")
 	}
 	err := db.Model(&model.Job{}).Where("id=?", data.Id).Select("status", cols...).Updates(data).Error

@@ -15,7 +15,7 @@ type taskRepositoryImpl struct {
 
 // 批量保存task信息
 func (s taskRepositoryImpl) BatchSave(db *gorm.DB, list []*model.Task) error {
-	err := db.CreateInBatches(&list, 100).Error
+	err := db.Omit("id", "output", "message", "finish_time").CreateInBatches(&list, 100).Error
 	if err != nil {
 		glog.Errorf("taskRepositoryImpl/BatchSave 批量保存task信息异常,参数:%s,err:%+v", kit.JsonEncode(list), err)
 		return err
@@ -24,7 +24,7 @@ func (s taskRepositoryImpl) BatchSave(db *gorm.DB, list []*model.Task) error {
 }
 
 func (s taskRepositoryImpl) Save(db *gorm.DB, model *model.Task) error {
-	err := db.Create(model).Error
+	err := db.Omit("id", "output", "message", "finish_time").Create(model).Error
 	if err != nil {
 		glog.Errorf("taskRepositoryImpl/Save 保存单个task信息异常,参数:%s,err:%+v", kit.JsonEncode(model), err)
 		return err
