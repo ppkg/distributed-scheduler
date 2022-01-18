@@ -130,6 +130,12 @@ func (s *scheduleEngine) BatchUpdateWorkerIndex(list []WorkerNode) {
 	}
 }
 
+// 是不是没有worker工作节点
+func (s *scheduleEngine) IsEmptyWorker() bool {
+	list:=s.pluginIndexer.GetAllWorker()
+	return len(list)==0
+}
+
 // 推送任务
 func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error {
 	tryCount := 3

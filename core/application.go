@@ -555,8 +555,6 @@ func (s *ApplicationContext) watchSchedulerService() error {
 					glog.Errorf("Application/watchSchedulerService 当前节点:%s，新增节点信息:%s，添加raft节点失败:%v", s.conf.Raft.NodeId, kit.JsonEncode(item), err)
 				}
 			}
-
-			glog.Infof("Application/watchSchedulerService 当前节点:%s,raft集群状态:%s", s.conf.Raft.NodeId, kit.JsonEncode(s.raft.GetConfiguration().Configuration().Servers))
 		},
 	})
 }

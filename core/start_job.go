@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -50,7 +51,24 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 
 	// job状态改为进行中
 	jobInfo.Job.Status = enum.DoingJobStatus
-	_ = s.jobRepo.UpdateStatus(s.Db, jobInfo.Job)
+	err := s.jobRepo.UpdateStatus(s.Db, jobInfo.Job)
+	if err != nil {
+		glog.Errorf("ApplicationContext/StartJob 更新job状态异常,id:%d,err:%+v", jobInfo.Job.Id, err)
+		return err
+	}
+
+	// 判断有没有worker可以调度
+	if s.Scheduler.IsEmptyWorker() {
+		jobInfo.Job.Status = enum.SystemExceptionJobStatus
+		jobInfo.Job.Message = fmt.Sprintf("系统没有worker节点提供给job(%d,%s)调度执行", jobInfo.Job.Id, jobInfo.Job.Name)
+		glog.Error(jobInfo.Job.Message)
+		err = s.jobRepo.UpdateStatus(s.Db, jobInfo.Job)
+		if err != nil {
+			glog.Errorf("ApplicationContext/StartJob 更新job状态异常,id:%d,err:%+v", jobInfo.Job.Id, err)
+			return err
+		}
+		return errors.New(jobInfo.Job.Message)
+	}
 
 	// 构建task并移交给scheduler调度器来调度
 	pluginSet := strings.Split(jobInfo.Job.PluginSet, ",")
@@ -85,7 +103,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 
 	// 保存job状态
 	jobInfo.Job.FinishTime = time.Now()
-	err := s.jobRepo.UpdateStatus(s.Db, jobInfo.Job)
+	err = s.jobRepo.UpdateStatus(s.Db, jobInfo.Job)
 	if err != nil {
 		glog.Errorf("ApplicationContext/StartJob 更新job状态异常,id:%d,err:%+v", jobInfo.Job.Id, err)
 		return err
@@ -94,7 +112,6 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	// 如果是异步job并且需要通知则推送通知
 	if jobInfo.Job.IsAsync == 1 && jobInfo.Job.IsNotify == 1 {
 		s.Scheduler.DispatchJobNotify(jobInfo, func(job *dto.JobInfo, err error) {
-			var myErr error
 			if err == nil {
 				glog.Infof("ApplicationContext/StartJob 推送job回调通知成功,id:%d,name:%s", job.Job.Id, job.Job.Name)
 				return
@@ -102,13 +119,13 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 
 			// 如果在推送出错前已经存在报错则不更改job状态及message信息
 			if job.Job.Status != enum.FinishJobStatus {
-				glog.Errorf("ApplicationContext/StartJob 推送job回调通知异常,id:%d,err:%+v", job.Job.Id, myErr)
+				glog.Errorf("ApplicationContext/StartJob 推送job回调通知异常,id:%d,err:%+v", job.Job.Id, err)
 				return
 			}
 
 			job.Job.Status = enum.NotifyExceptionJobStatus
 			job.Job.Message = err.Error()
-			myErr = s.jobRepo.UpdateStatus(s.Db, job.Job)
+			myErr := s.jobRepo.UpdateStatus(s.Db, job.Job)
 			if myErr != nil {
 				glog.Errorf("ApplicationContext/StartJob job回调通知->更新job状态异常,id:%d,err:%+v", job.Job.Id, myErr)
 			}

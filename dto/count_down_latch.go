@@ -19,6 +19,9 @@ func (s *CountDownLatch) Wait() {
 }
 
 func (s *CountDownLatch) Done() {
+	if s.isClose == 1 {
+		return
+	}
 	s.ch <- struct{}{}
 }
 
@@ -29,8 +32,13 @@ func (s *CountDownLatch) Close() {
 }
 
 func NewCountDownLatch(count int) *CountDownLatch {
-	return &CountDownLatch{
+	instance := &CountDownLatch{
 		count: count,
 		ch:    make(chan struct{}, count),
 	}
+	if count <= 0 {
+		instance.isClose = 1
+		close(instance.ch)
+	}
+	return instance
 }
