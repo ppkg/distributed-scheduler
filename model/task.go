@@ -23,8 +23,6 @@ type Task struct {
 	Message string
 	// 分配执行节点ID
 	NodeId string
-	// 分配执行节点端点
-	Endpoint string
 	// 创建时间
 	CreateTime time.Time `gorm:"->"`
 	// 更新时间

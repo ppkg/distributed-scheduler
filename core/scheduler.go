@@ -69,7 +69,7 @@ func (s *scheduleEngine) startWork(worker WorkerNode) {
 	if err != nil {
 		glog.Errorf("scheduleEngine/startWork %v", err)
 	}
-	glog.Infof("scheduleEngine/startWork worker节点(%s,%s)开始工作", worker.NodeId, worker.Endpoint)
+	glog.Infof("scheduleEngine/startWork worker节点(%s)开始工作", worker.NodeId)
 loop:
 	for {
 		select {
@@ -83,11 +83,11 @@ loop:
 				continue
 			}
 			// 如果task提交给worker线程池失败则重新入列
-			glog.Errorf("scheduleEngine/startWork worker节点(%s,%s)往线程池提交task失败,err:%+v", worker.NodeId, worker.Endpoint, err)
+			glog.Errorf("scheduleEngine/startWork worker节点(%s)往线程池提交task失败,err:%+v", worker.NodeId, err)
 			s.dispatchQueue <- fn
 		}
 	}
-	glog.Infof("scheduleEngine/startWork worker节点(%s,%s)停止工作", worker.NodeId, worker.Endpoint)
+	glog.Infof("scheduleEngine/startWork worker节点(%s)停止工作", worker.NodeId)
 }
 
 func (s *scheduleEngine) RemoveWorker(worker WorkerNode) {
@@ -187,7 +187,6 @@ func (s *scheduleEngine) appendExcludeWorker(list []WorkerNode, worker WorkerNod
 // 推送任务给worker执行
 func (s *scheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
 	t.NodeId = worker.NodeId
-	t.Endpoint = worker.Endpoint
 	t.Status = enum.DoingTaskStatus
 
 	conn, err := s.workerConns.Get(worker)
@@ -407,7 +406,7 @@ func (s *scheduleEngine) DispatchJobNotify(job *dto.JobInfo, callback func(job *
 			if err == nil {
 				return
 			}
-			err = fmt.Errorf("重试推送3次job回调通知异常,最后一次推送worker(%s,%s),err:%+v", myWorker.NodeId, myWorker.Endpoint, err)
+			err = fmt.Errorf("重试推送3次job回调通知异常,最后一次推送worker(%s),err:%+v", myWorker.NodeId, err)
 			glog.Errorf("ScheduleEngine/DispatchJobNotify 第%d次推送job回调通知异常,worker:%s,jobId:%d,err:%+v", i+1, kit.JsonEncode(myWorker), job.Job.Id, err)
 		}
 	}
@@ -466,7 +465,7 @@ func (s *workerPoolMap) Get(worker WorkerNode) (*ants.Pool, <-chan int, error) {
 	if ok {
 		return val, s.closeChannels[worker.NodeId], nil
 	}
-	return nil, nil, fmt.Errorf("工作节点worker(%s,%s)线程池未创建", worker.NodeId, worker.Endpoint)
+	return nil, nil, fmt.Errorf("工作节点worker(%s)线程池未创建", worker.NodeId)
 }
 
 func (s *workerPoolMap) Put(worker WorkerNode, size int) error {
@@ -474,7 +473,7 @@ func (s *workerPoolMap) Put(worker WorkerNode, size int) error {
 	defer s.lock.Unlock()
 	pool, err := ants.NewPool(size)
 	if err != nil {
-		return fmt.Errorf("工作节点worker(%s,%s)实例化线程池失败,err:%+v", worker.NodeId, worker.Endpoint, err)
+		return fmt.Errorf("工作节点worker(%s)实例化线程池失败,err:%+v", worker.NodeId, err)
 	}
 	s.pools[worker.NodeId] = pool
 	s.closeChannels[worker.NodeId] = make(chan int)

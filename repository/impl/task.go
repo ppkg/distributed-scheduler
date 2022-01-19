@@ -52,7 +52,7 @@ func (s taskRepositoryImpl) List(db *gorm.DB, params map[string]interface{}) ([]
 // 更新task状态
 func (s taskRepositoryImpl) UpdateStatus(db *gorm.DB, data *model.Task) error {
 	cols := []interface{}{
-		"node_id", "endpoint",
+		"node_id",
 	}
 	if data.Status == enum.FinishTaskStatus {
 		cols = append(cols, "output", "finish_time")
