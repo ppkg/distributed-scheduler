@@ -29,6 +29,8 @@ message AsyncSubmitRequest {
   bool IsNotify = 5;
   // job标签，便于job快速搜索
   string Label = 6;
+  // 数据来源，提交job的应用名称
+  string Source = 7;
 }
 
 message AsyncSubmitResponse {
@@ -59,6 +61,8 @@ message SyncSubmitRequest {
   string Data = 3;
   // job标签，便于job快速搜索
   string Label = 4;
+  // 数据来源，提交job的应用名称
+  string Source = 5;
 }
 
 message SyncSubmitResponse {

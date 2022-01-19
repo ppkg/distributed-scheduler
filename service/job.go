@@ -152,6 +152,7 @@ func (s *jobService) receiveSyncJobStream(stream job.JobService_SyncSubmitServer
 				Name:      r.Name,
 				PluginSet: strings.Join(r.PluginSet, ","),
 				Label:     r.Label,
+				Source:    r.Source,
 			}
 			firstPlugin = r.PluginSet[0]
 		}
@@ -193,6 +194,7 @@ func (s *jobService) receiveAsyncJobStream(stream job.JobService_AsyncSubmitServ
 				PluginSet: strings.Join(r.PluginSet, ","),
 				IsAsync:   1,
 				Label:     r.Label,
+				Source:    r.Source,
 			}
 			if r.IsNotify {
 				jobInfo.Job.IsNotify = 1
