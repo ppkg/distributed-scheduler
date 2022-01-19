@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package node;
 
+option go_package = "./proto/node";
+
 import "google/protobuf/empty.proto";
 
 //------------------节点信息模块------------------------------------------

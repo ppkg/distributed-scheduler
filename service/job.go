@@ -62,53 +62,6 @@ func (s *jobService) AsyncNotify(ctx context.Context, req *job.AsyncNotifyReques
 	panic("not implemented")
 }
 
-// 异步通知
-// func (s *jobService) AsyncNotify(req *job.AsyncNotifyRequest, resp *goo) error {
-// 	if _, ok := s.appCtx.Scheduler.NotifyChannel.GetChannel(req.NodeId); ok {
-// 		err := fmt.Errorf("节点(%s)已注册订阅，不可用重复订阅", req.NodeId)
-// 		glog.Error(err)
-// 		return err
-// 	}
-// 	s.appCtx.Scheduler.NotifyChannel.RegisterChannel(req.NodeId)
-// 	channel, _ := s.appCtx.Scheduler.NotifyChannel.GetChannel(req.NodeId)
-
-// 	var err error
-// 	var myJob *dto.JobInfo
-// 	for item := range channel {
-// 		err = steam.Send(&job.AsyncNotifyResponse{
-// 			Id:     item.Job.Id,
-// 			Name:   item.Job.Name,
-// 			Type:   item.Job.Type,
-// 			Status: item.Job.Status,
-// 			Result: item.Job.Result,
-// 		})
-// 		if err == nil {
-// 			// 更新推送状态
-// 			_=s.jobRepo.UpdateNotifyStatus(s.appCtx.Db, item.Job.Id, enum.SuccessNotifyStatus)
-// 			glog.Infof("jobService/AsyncNotify 通知worker(%s)成功,jobId:%d,jobName:%s", req.NodeId, item.Job.Id, item.Job.Name)
-// 			continue
-// 		}
-// 		// 如果异步通知失败则关闭通道并重新发送给其他channel执行
-// 		myJob = item
-// 		glog.Errorf("jobService/AsyncNotify 通知worker(%s)失败,jobId:%d,jobName:%s,err:%+v", req.NodeId, item.Job.Id, item.Job.Name, err)
-// 		break
-// 	}
-
-// 	// 如果是异常退出并关闭通道
-// 	s.appCtx.Scheduler.NotifyChannel.RemoveAndCloseChannel(req.NodeId)
-
-// 	myJob.NotifyCount++
-// 	// 如果重试超过5次则不再重推通知,一下推送状态
-// 	if myJob.NotifyCount > 5 {
-// 		_=s.jobRepo.UpdateNotifyStatus(s.appCtx.Db, myJob.Job.Id, enum.FailNotifyStatus)
-// 		return err
-// 	}
-
-// 	// 重新推送给其他worker通道
-// 	s.appCtx.Scheduler.DispatchNotify(myJob)
-// 	return err
-// }
-
 // 同步提交job
 func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 	jobInfo, err := s.receiveSyncJobStream(stream)
@@ -198,6 +151,7 @@ func (s *jobService) receiveSyncJobStream(stream job.JobService_SyncSubmitServer
 			jobInfo.Job = &model.Job{
 				Name:      r.Name,
 				PluginSet: strings.Join(r.PluginSet, ","),
+				Label:     r.Label,
 			}
 			firstPlugin = r.PluginSet[0]
 		}
@@ -238,6 +192,7 @@ func (s *jobService) receiveAsyncJobStream(stream job.JobService_AsyncSubmitServ
 				Type:      r.Type,
 				PluginSet: strings.Join(r.PluginSet, ","),
 				IsAsync:   1,
+				Label:     r.Label,
 			}
 			if r.IsNotify {
 				jobInfo.Job.IsNotify = 1

@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package task;
 
+option go_package = "./proto/task";
+
 //------------------Task模块------------------------------------------
 service TaskService {
   // 同步提交task
