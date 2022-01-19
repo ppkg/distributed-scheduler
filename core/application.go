@@ -93,6 +93,9 @@ func (s *ApplicationContext) watchRaftLeader() {
 // 初始化默认配置
 func (s *ApplicationContext) initDefaultConfig() {
 	s.conf.AppName = os.Getenv("APP_NAME")
+	if s.conf.AppName == "" {
+		s.conf.AppName = "distributed-scheduler"
+	}
 	s.conf.PeerIp = os.Getenv("PEER_IP")
 	if s.conf.PeerIp == "" {
 		s.conf.PeerIp = util.GetLocalIp()
@@ -110,8 +113,8 @@ func (s *ApplicationContext) initDefaultConfig() {
 		s.conf.SchedulerThreadCount, _ = strconv.Atoi(threadCount)
 	}
 	if s.conf.SchedulerThreadCount == 0 {
-		// worker协程池大小默认1000
-		s.conf.SchedulerThreadCount = 1000
+		// worker协程池大小默认100
+		s.conf.SchedulerThreadCount = 100
 	}
 
 	s.conf.Raft.NodeId = os.Getenv("NODE_ID")

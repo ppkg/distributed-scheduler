@@ -94,6 +94,7 @@ func (s *scheduleEngine) RemoveWorker(worker WorkerNode) {
 	s.pluginIndexer.RemoveWorker(worker.NodeId, worker.PluginSet)
 	s.jobNotifyIndexer.RemoveWorker(worker.NodeId, worker.JobNotifySet)
 	s.workerPools.Remove(worker)
+	s.workerConns.Remove(worker)
 }
 
 // 批量更新worker索引
@@ -132,8 +133,8 @@ func (s *scheduleEngine) BatchUpdateWorkerIndex(list []WorkerNode) {
 
 // 是不是没有worker工作节点
 func (s *scheduleEngine) IsEmptyWorker() bool {
-	list:=s.pluginIndexer.GetAllWorker()
-	return len(list)==0
+	list := s.pluginIndexer.GetAllWorker()
+	return len(list) == 0
 }
 
 // 推送任务
@@ -282,6 +283,17 @@ func (s *workerConnMap) Get(worker WorkerNode) (*grpc.ClientConn, error) {
 	}
 	s.cache[worker.NodeId] = conn
 	return conn, nil
+}
+
+func (s *workerConnMap) Remove(worker WorkerNode) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	conn, ok := s.cache[worker.NodeId]
+	if !ok {
+		return
+	}
+	delete(s.cache, worker.NodeId)
+	_ = conn.Close()
 }
 
 type safeUint32 struct {
