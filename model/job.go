@@ -14,7 +14,7 @@ type Job struct {
 	Label string
 	// 数据来源，提交job的应用名称
 	Source string
-	// task异常操作，0：退出当前job，1：继续执行
+	// task异常操作，0：退出job执行，1：跳过当前task继续执行下一个
 	TaskExceptionOperation int32
 	// job状态,0:待执行，1：执行中，2：执行完成，3：取消执行，4：系统异常，5：task推送失败，6：运行超时，7：业务处理异常，8：回调通知异常
 	Status int32

@@ -40,7 +40,7 @@ type AsyncSubmitRequest struct {
 	Label string `protobuf:"bytes,6,opt,name=Label,proto3" json:"Label"`
 	// 数据来源，提交job的应用名称
 	Source string `protobuf:"bytes,7,opt,name=Source,proto3" json:"Source"`
-	// task异常操作，0：退出当前job，1：继续执行
+	// task异常操作，0：退出job执行，1：跳过当前task继续执行下一个
 	TaskExceptionOperation int32    `protobuf:"varint,8,opt,name=TaskExceptionOperation,proto3" json:"TaskExceptionOperation"`
 	XXX_NoUnkeyedLiteral   struct{} `json:"-"`
 	XXX_unrecognized       []byte   `json:"-"`
@@ -263,7 +263,7 @@ type SyncSubmitRequest struct {
 	Label string `protobuf:"bytes,4,opt,name=Label,proto3" json:"Label"`
 	// 数据来源，提交job的应用名称
 	Source string `protobuf:"bytes,5,opt,name=Source,proto3" json:"Source"`
-	// task异常操作，0：退出当前job，1：继续执行
+	// task异常操作，0：退出job执行，1：跳过当前task继续执行下一个
 	TaskExceptionOperation int32    `protobuf:"varint,6,opt,name=TaskExceptionOperation,proto3" json:"TaskExceptionOperation"`
 	XXX_NoUnkeyedLiteral   struct{} `json:"-"`
 	XXX_unrecognized       []byte   `json:"-"`

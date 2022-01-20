@@ -31,7 +31,7 @@ message AsyncSubmitRequest {
   string Label = 6;
   // 数据来源，提交job的应用名称
   string Source = 7;
-  // task异常操作，0：退出当前job，1：继续执行
+  // task异常操作，0：退出job执行，1：跳过当前task继续执行下一个
   int32 TaskExceptionOperation = 8;
 }
 
@@ -65,7 +65,7 @@ message SyncSubmitRequest {
   string Label = 4;
   // 数据来源，提交job的应用名称
   string Source = 5;
-  // task异常操作，0：退出当前job，1：继续执行
+  // task异常操作，0：退出job执行，1：跳过当前task继续执行下一个
   int32 TaskExceptionOperation = 6;
 }
 
