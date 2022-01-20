@@ -28,7 +28,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	}
 	ctx = context.WithValue(ctx, dto.CancelTaskKey{}, cancelParam)
 	defer func() {
-		if atomic.CompareAndSwapInt32(&cancelParam.State, enum.NormalRuningState, -1) {
+		if atomic.CompareAndSwapInt32(&cancelParam.State, int32(enum.NormalRuningState), -1) {
 			cancelParam.CancelFunc()
 		}
 	}()
@@ -37,7 +37,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	timeout := time.AfterFunc(3*time.Hour, func() {
 		errMsg := fmt.Sprintf("job(%d,%s)处理超时终止运行,task数量:%d", jobInfo.Job.Id, jobInfo.Job.Name, jobInfo.Job.Size)
 		util.CancelNotify(ctx, jobInfo, errMsg)
-		jobInfo.Job.Status = enum.RunningTimeoutJobStatus
+		jobInfo.Job.Status = int32(enum.RunningTimeoutJobStatus)
 		glog.Error(errMsg)
 	})
 	defer timeout.Stop()
@@ -50,7 +50,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	defer s.jobContainer.Remove(jobInfo.Job.Id)
 
 	// job状态改为进行中
-	jobInfo.Job.Status = enum.DoingJobStatus
+	jobInfo.Job.Status = int32(enum.DoingJobStatus)
 	err := s.jobRepo.UpdateStatus(s.Db, jobInfo.Job)
 	if err != nil {
 		glog.Errorf("ApplicationContext/StartJob 更新job状态异常,id:%d,err:%+v", jobInfo.Job.Id, err)
@@ -59,7 +59,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 
 	// 判断有没有worker可以调度
 	if s.Scheduler.IsEmptyWorker() {
-		jobInfo.Job.Status = enum.SystemExceptionJobStatus
+		jobInfo.Job.Status = int32(enum.SystemExceptionJobStatus)
 		jobInfo.Job.Message = fmt.Sprintf("系统没有worker节点提供给job(%d,%s)调度执行", jobInfo.Job.Id, jobInfo.Job.Name)
 		glog.Error(jobInfo.Job.Message)
 		err = s.jobRepo.UpdateStatus(s.Db, jobInfo.Job)
@@ -78,12 +78,12 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	// 阻塞等待所有task执行完毕
 	jobInfo.DoneLatch.Wait()
 	// 判断是否task都执行完毕，如果是则改为已完成状态
-	if cancelParam.State == enum.NormalRuningState {
+	if enum.ContextState(cancelParam.State) == enum.NormalRuningState {
 		endTasks := jobInfo.FilterFinishEndTask()
 		if jobInfo.Job.Size == int32(len(endTasks)) {
-			jobInfo.Job.Status = enum.FinishJobStatus
+			jobInfo.Job.Status = int32(enum.FinishJobStatus)
 		} else {
-			jobInfo.Job.Status = enum.BusinessExceptionJobStatus
+			jobInfo.Job.Status = int32(enum.BusinessExceptionJobStatus)
 			errTaskList := jobInfo.ExceptionTask.GetAll()
 			msgList := make([]string, 0)
 			msgList = append(msgList, fmt.Sprintf("共有%d个task执行失败", len(errTaskList)))
@@ -95,13 +95,13 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 			}
 			jobInfo.Job.Message = strings.Join(msgList, ";")
 		}
-	} else if cancelParam.State == enum.ExceptionCancelState {
+	} else if enum.ContextState(cancelParam.State) == enum.ExceptionCancelState {
 		// 记录取消原因
 		jobInfo.Job.Message = cancelParam.Reason
 	}
 
 	// 如果job是已完成状态则进行合并结果
-	if jobInfo.Job.Status == enum.FinishJobStatus {
+	if enum.JobStatus(jobInfo.Job.Status) == enum.FinishJobStatus {
 		result, err := jobInfo.Reduce()
 		if err != nil {
 			glog.Errorf("ApplicationContext/StartJob 合并task数据异常,%v", err)
@@ -127,12 +127,12 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 			}
 
 			// 如果在推送出错前已经存在报错则不更改job状态及message信息
-			if job.Job.Status != enum.FinishJobStatus {
+			if enum.JobStatus(job.Job.Status) != enum.FinishJobStatus {
 				glog.Errorf("ApplicationContext/StartJob 推送job回调通知异常,id:%d,err:%+v", job.Job.Id, err)
 				return
 			}
 
-			job.Job.Status = enum.NotifyExceptionJobStatus
+			job.Job.Status = int32(enum.NotifyExceptionJobStatus)
 			job.Job.Message = err.Error()
 			myErr := s.jobRepo.UpdateStatus(s.Db, job.Job)
 			if myErr != nil {
@@ -170,7 +170,7 @@ func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.Job
 	// 递归查找
 	result = append(result, s.filterPendingTask(ctx, job, pos+1, pluginSet)...)
 	for _, item := range list {
-		if item.Status != enum.FinishTaskStatus {
+		if enum.TaskStatus(item.Status) != enum.FinishTaskStatus {
 			result = append(result, item)
 			continue
 		}
@@ -205,12 +205,12 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 		if err != nil {
 			// 推送失败
 			errMsg := fmt.Sprintf("推送task(%d,%s)失败,err:%+v", task.Id, task.Name, err)
-			task.Status = enum.ExceptionTaskStatus
+			task.Status = int32(enum.ExceptionTaskStatus)
 			task.Message = errMsg
 			glog.Errorf("ApplicationContext/taskCallback %s", errMsg)
 
 			if s.isNeedCancelJob(job, task) {
-				job.Job.Status = enum.PushTaskExceptionJobStatus
+				job.Job.Status = int32(enum.PushTaskExceptionJobStatus)
 				util.CancelNotify(ctx, job, errMsg)
 			}
 		}
@@ -220,19 +220,19 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 		err = s.taskRepo.UpdateStatus(s.Db, task)
 		if err != nil {
 			errMsg := fmt.Sprintf("持久化task(%d,%s)状态失败,%+v", task.Id, task.Name, err)
-			task.Status = enum.ExceptionTaskStatus
+			task.Status = int32(enum.ExceptionTaskStatus)
 			task.Message = errMsg
 			glog.Errorf("ApplicationContext/taskCallback %s", errMsg)
 
 			if s.isNeedCancelJob(job, task) {
-				job.Job.Status = enum.SystemExceptionJobStatus
+				job.Job.Status = int32(enum.SystemExceptionJobStatus)
 				util.CancelNotify(ctx, job, errMsg)
 			}
 			return
 		}
 
 		// 判断任务是否执行异常，异常则通知其他task停止执行
-		if task.Status != enum.FinishTaskStatus {
+		if enum.TaskStatus(task.Status) != enum.FinishTaskStatus {
 			errMsg := fmt.Sprintf("task(%d,%s)业务处理失败,%s", task.Id, task.Name, task.Message)
 			if task.Message == "" {
 				task.Message = "业务处理失败"
@@ -240,7 +240,7 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 			glog.Errorf("ApplicationContext/taskCallback %s", errMsg)
 
 			if s.isNeedCancelJob(job, task) {
-				job.Job.Status = enum.BusinessExceptionJobStatus
+				job.Job.Status = int32(enum.BusinessExceptionJobStatus)
 				util.CancelNotify(ctx, job, errMsg)
 			}
 			return
@@ -248,7 +248,7 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 
 		// 判断当前task是不是被取消了，如果是则直接return
 		cancelParam := ctx.Value(dto.CancelTaskKey{}).(*dto.CancelTaskParam)
-		if cancelParam.State != enum.NormalRuningState {
+		if enum.ContextState(cancelParam.State) != enum.NormalRuningState {
 			return
 		}
 
@@ -257,7 +257,7 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 		if pos == -1 {
 			glog.Errorf("ApplicationContext/taskCallback job找不到plugin(%s),id:%d", task.Plugin, task.Id)
 			util.CancelNotify(ctx, job, fmt.Sprintf("job(%d,%s)不支持plugin(%s)", job.Job.Id, job.Job.Name, task.Plugin))
-			job.Job.Status = enum.SystemExceptionJobStatus
+			job.Job.Status = int32(enum.SystemExceptionJobStatus)
 			return
 		}
 
@@ -280,7 +280,7 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 
 // 当task执行异常是否需要取消job，如果job为继续执行模式则其他task会继续执行下去
 func (s *ApplicationContext) isNeedCancelJob(job *dto.JobInfo, task *model.Task) bool {
-	if job.Job.TaskExceptionOperation == enum.ExitTaskExceptionOperation {
+	if enum.TaskExceptionOperation(job.Job.TaskExceptionOperation) == enum.ExitTaskExceptionOperation {
 		return true
 	}
 	job.ExceptionTask.Append(task)
@@ -303,7 +303,7 @@ func (s *ApplicationContext) createNewTask(ctx context.Context, job *dto.JobInfo
 	if err != nil {
 		glog.Errorf("ApplicationContext/createNewTask 持久化新task失败,task:%s,err:%+v", kit.JsonEncode(newTask), err)
 		util.CancelNotify(ctx, job, fmt.Sprintf("新task(%s)持久化失败,jobId:%d,%+v", task.Name, newTask.JobId, err))
-		job.Job.Status = enum.SystemExceptionJobStatus
+		job.Job.Status = int32(enum.SystemExceptionJobStatus)
 		return nil
 	}
 	return newTask
@@ -351,7 +351,7 @@ func (s *ApplicationContext) loadUndoneAsyncJob() ([]*dto.JobInfo, error) {
 		"startTime": startTime,
 		"endTime":   endTime,
 		"isAsync":   1,
-		"inStatus":  []int32{enum.PendingJobStatus, enum.DoingJobStatus, enum.SystemExceptionJobStatus, enum.PushTaskExceptionJobStatus, enum.NotifyExceptionJobStatus},
+		"inStatus":  []enum.JobStatus{enum.PendingJobStatus, enum.DoingJobStatus, enum.SystemExceptionJobStatus, enum.PushTaskExceptionJobStatus, enum.NotifyExceptionJobStatus},
 	})
 	if err != nil {
 		return nil, err

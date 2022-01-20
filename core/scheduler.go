@@ -187,7 +187,7 @@ func (s *scheduleEngine) appendExcludeWorker(list []WorkerNode, worker WorkerNod
 // 推送任务给worker执行
 func (s *scheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
 	t.NodeId = worker.NodeId
-	t.Status = enum.DoingTaskStatus
+	t.Status = int32(enum.DoingTaskStatus)
 
 	conn, err := s.workerConns.Get(worker)
 	if err != nil {
@@ -341,10 +341,10 @@ func (s *scheduleEngine) buildTaskFunc(job *dto.JobInfo, task InputTask) func(wo
 		defer func() {
 			if panic := recover(); panic != nil {
 				errMsg := fmt.Sprintf("运行task(%d,%s) panic:%+v,trace:%s", task.Task.Id, task.Task.Name, panic, util.PanicTrace())
-				task.Task.Status = enum.ExceptionTaskStatus
+				task.Task.Status = int32(enum.ExceptionTaskStatus)
 				task.Task.Message = errMsg
 				util.CancelNotify(task.Ctx, job, errMsg)
-				job.Job.Status = enum.SystemExceptionJobStatus
+				job.Job.Status = int32(enum.SystemExceptionJobStatus)
 				glog.Error(errMsg)
 			}
 		}()

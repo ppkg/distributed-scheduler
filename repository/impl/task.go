@@ -54,10 +54,10 @@ func (s taskRepositoryImpl) UpdateStatus(db *gorm.DB, data *model.Task) error {
 	cols := []interface{}{
 		"node_id",
 	}
-	if data.Status == enum.FinishTaskStatus {
+	if enum.TaskStatus(data.Status) == enum.FinishTaskStatus {
 		cols = append(cols, "output", "finish_time")
 	}
-	if data.Status == enum.ExceptionTaskStatus {
+	if enum.TaskStatus(data.Status) == enum.ExceptionTaskStatus {
 		cols = append(cols, "message")
 	}
 	err := db.Model(&model.Task{}).Where("id=?", data.Id).Select("status", cols...).Updates(data).Error

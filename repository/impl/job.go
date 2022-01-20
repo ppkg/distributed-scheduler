@@ -69,13 +69,13 @@ func (s jobRepositoryImpl) List(db *gorm.DB, params map[string]interface{}) ([]*
 // 更新job状态
 func (s jobRepositoryImpl) UpdateStatus(db *gorm.DB, data *model.Job) error {
 	cols := []interface{}{}
-	if data.Status == enum.FinishJobStatus {
+	if enum.JobStatus(data.Status) == enum.FinishJobStatus {
 		cols = append(cols, "result", "finish_time")
 	}
-	if data.Status == enum.CancelJobStatus || data.Status == enum.SystemExceptionJobStatus || data.Status == enum.PushTaskExceptionJobStatus || data.Status == enum.RunningTimeoutJobStatus || data.Status == enum.BusinessExceptionJobStatus || data.Status == enum.NotifyExceptionJobStatus {
+	if enum.JobStatus(data.Status) == enum.CancelJobStatus || enum.JobStatus(data.Status) == enum.SystemExceptionJobStatus || enum.JobStatus(data.Status) == enum.PushTaskExceptionJobStatus || enum.JobStatus(data.Status) == enum.RunningTimeoutJobStatus || enum.JobStatus(data.Status) == enum.BusinessExceptionJobStatus || enum.JobStatus(data.Status) == enum.NotifyExceptionJobStatus {
 		cols = append(cols, "message")
 	}
-	if data.Status == enum.DoingJobStatus {
+	if enum.JobStatus(data.Status) == enum.DoingJobStatus {
 		cols = append(cols, "message")
 		data.Message = ""
 	}

@@ -32,7 +32,7 @@ func (s *JobInfo) FilterFinishEndTask() []*model.Task {
 	targetPlugin := pluginList[len(pluginList)-1]
 	var taskList []*model.Task
 	for _, item := range s.TaskList.GetAll() {
-		if item.Status == enum.FinishTaskStatus && item.Plugin == targetPlugin {
+		if enum.TaskStatus(item.Status) == enum.FinishTaskStatus && item.Plugin == targetPlugin {
 			taskList = append(taskList, item)
 		}
 	}

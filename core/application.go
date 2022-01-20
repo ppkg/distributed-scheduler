@@ -84,7 +84,7 @@ func (s *ApplicationContext) watchRaftLeader() {
 		glog.Infof("ApplicationContext/watchRaftLeader 当前raft节点(%s,%s)失去leader身份", s.conf.Raft.NodeId, s.getPeerAddr())
 		for _, job := range s.jobContainer.GetAll() {
 			util.CancelNotify(job.Ctx, job.Job, fmt.Sprintf("当前raft节点(%s,%s)失去leader身份,取消正在运行job", s.conf.Raft.NodeId, s.getPeerAddr()))
-			job.Job.Job.Status = enum.SystemExceptionJobStatus
+			job.Job.Job.Status = int32(enum.SystemExceptionJobStatus)
 		}
 		s.jobContainer.RemoveAll()
 	}
@@ -283,7 +283,7 @@ func (s *ApplicationContext) initRaft() error {
 	serviceList := s.getServiceList(s.conf.AppName)
 	for _, item := range serviceList {
 		// 如果有raft已创建raft集群则当前节点不再重复创建集群
-		if item.Metadata["role"] == enum.LeaderRaftRole {
+		if enum.RaftRole(item.Metadata["role"]) == enum.LeaderRaftRole {
 			return nil
 		}
 	}
@@ -306,7 +306,7 @@ func (s *ApplicationContext) initRaft() error {
 		if item.Metadata["nodeId"] != s.conf.Raft.NodeId {
 			continue
 		}
-		item.Metadata["role"] = enum.LeaderRaftRole
+		item.Metadata["role"] = string(enum.LeaderRaftRole)
 		s.updateNacosInstance(item)
 	}
 	return nil
@@ -331,12 +331,12 @@ func (s *ApplicationContext) updateNacosInstance(instance nacosModel.Instance) {
 }
 
 // 更新当前service身份
-func (s *ApplicationContext) updateCurrentNacosRole(role string) {
+func (s *ApplicationContext) updateCurrentNacosRole(role enum.RaftRole) {
 	instance := s.getCurrentNacosInstance()
 	if instance == nil {
 		return
 	}
-	instance.Metadata["role"] = role
+	instance.Metadata["role"] = string(role)
 	s.updateNacosInstance(*instance)
 }
 
@@ -481,7 +481,7 @@ func (s *ApplicationContext) initNacos() error {
 		Metadata: map[string]string{
 			"appName": s.conf.AppName,
 			"nodeId":  s.conf.Raft.NodeId,
-			"role":    enum.FollowerRaftRole,
+			"role":    string(enum.FollowerRaftRole),
 		},
 		ClusterName: s.conf.Nacos.ClusterName,  // default value is DEFAULT
 		GroupName:   s.conf.Nacos.ServiceGroup, // default value is DEFAULT_GROUP

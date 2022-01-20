@@ -14,7 +14,7 @@ func CancelNotify(ctx context.Context, job *dto.JobInfo, reason string) {
 	// 通知未执行task取消操作
 	cancelParam := ctx.Value(dto.CancelTaskKey{}).(*dto.CancelTaskParam)
 	cancelParam.Reason = reason
-	if atomic.CompareAndSwapInt32(&cancelParam.State, enum.NormalRuningState, enum.ExceptionCancelState) {
+	if atomic.CompareAndSwapInt32(&cancelParam.State, int32(enum.NormalRuningState), int32(enum.ExceptionCancelState)) {
 		job.DoneLatch.Close()
 		cancelParam.CancelFunc()
 	}

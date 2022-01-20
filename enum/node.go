@@ -1,6 +1,7 @@
 package enum
 
 const (
-	LeaderRaftRole   = "leader"
-	FollowerRaftRole = "follower"
+	LeaderRaftRole   RaftRole = "leader"
+	FollowerRaftRole RaftRole = "follower"
 )
+type RaftRole string
