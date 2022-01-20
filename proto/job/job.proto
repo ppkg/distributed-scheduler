@@ -31,6 +31,8 @@ message AsyncSubmitRequest {
   string Label = 6;
   // 数据来源，提交job的应用名称
   string Source = 7;
+  // task异常操作，0：退出当前job，1：继续执行
+  int32 TaskExceptionOperation = 8;
 }
 
 message AsyncSubmitResponse {
@@ -63,6 +65,8 @@ message SyncSubmitRequest {
   string Label = 4;
   // 数据来源，提交job的应用名称
   string Source = 5;
+  // task异常操作，0：退出当前job，1：继续执行
+  int32 TaskExceptionOperation = 6;
 }
 
 message SyncSubmitResponse {
@@ -73,5 +77,5 @@ message SyncSubmitResponse {
   // 处理结果
   string Result = 3;
   // 异常信息
-  string Mesage = 6;
+  string Mesage = 4;
 }

@@ -11,19 +11,19 @@ import (
 )
 
 type JobInfo struct {
-	DoneLatch     *CountDownLatch
-	Job      *model.Job
-	TaskList []*model.Task
-	lock     sync.Mutex
-	// 通知次数
-	NotifyCount int32
+	DoneLatch *CountDownLatch
+	Job       *model.Job
+	TaskList  []*model.Task
+	lock      sync.Mutex
+	// 已执行失败task
+	ExceptionTasks []*model.Task
 }
 
 // 初始化已完成task channel
 func (s *JobInfo) InitDoneChannel() {
 	finishTask := s.FilterFinishEndTask()
 	cacheSize := int(s.Job.Size) - len(finishTask)
-	s.DoneLatch=NewCountDownLatch(cacheSize)
+	s.DoneLatch = NewCountDownLatch(cacheSize)
 }
 
 // 过滤出已完成最后task
@@ -77,4 +77,27 @@ func (s *JobInfo) Reduce() (string, error) {
 		return "", fmt.Errorf("序列化异常,data:%+v,err:%+v", result, err)
 	}
 	return string(data), nil
+}
+
+type concurrentTask struct {
+	data []*model.Task
+	lock sync.RWMutex
+}
+
+func (s *concurrentTask) Append(task *model.Task) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.data = append(s.data, task)
+}
+
+func (s *concurrentTask) GetAll() []*model.Task {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	list := make([]*model.Task, 0, len(s.data))
+	list = append(list, s.data...)
+	return list
+}
+
+func NewConcurrentTask() *concurrentTask {
+	return &concurrentTask{}
 }

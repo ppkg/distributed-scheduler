@@ -149,10 +149,11 @@ func (s *jobService) receiveSyncJobStream(stream job.JobService_SyncSubmitServer
 		// 初始化job数据
 		if jobInfo.Job == nil {
 			jobInfo.Job = &model.Job{
-				Name:      r.Name,
-				PluginSet: strings.Join(r.PluginSet, ","),
-				Label:     r.Label,
-				Source:    r.Source,
+				Name:                   r.Name,
+				PluginSet:              strings.Join(r.PluginSet, ","),
+				Label:                  r.Label,
+				Source:                 r.Source,
+				TaskExceptionOperation: r.TaskExceptionOperation,
 			}
 			firstPlugin = r.PluginSet[0]
 		}
@@ -189,12 +190,13 @@ func (s *jobService) receiveAsyncJobStream(stream job.JobService_AsyncSubmitServ
 		// 初始化job数据
 		if jobInfo.Job == nil {
 			jobInfo.Job = &model.Job{
-				Name:      r.Name,
-				Type:      r.Type,
-				PluginSet: strings.Join(r.PluginSet, ","),
-				IsAsync:   1,
-				Label:     r.Label,
-				Source:    r.Source,
+				Name:                   r.Name,
+				Type:                   r.Type,
+				PluginSet:              strings.Join(r.PluginSet, ","),
+				IsAsync:                1,
+				Label:                  r.Label,
+				Source:                 r.Source,
+				TaskExceptionOperation: r.TaskExceptionOperation,
 			}
 			if r.IsNotify {
 				jobInfo.Job.IsNotify = 1

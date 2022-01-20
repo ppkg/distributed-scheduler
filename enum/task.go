@@ -8,9 +8,15 @@ const (
 	ExceptionTaskStatus int32 = 3
 )
 
-var TaskStatusMap=map[int32]string{
-	PendingTaskStatus:"待执行",
-	DoingTaskStatus:"执行中",
-	FinishTaskStatus:"执行完成",
-	ExceptionTaskStatus:"异常退出",
+var TaskStatusMap = map[int32]string{
+	PendingTaskStatus:   "待执行",
+	DoingTaskStatus:     "执行中",
+	FinishTaskStatus:    "执行完成",
+	ExceptionTaskStatus: "异常退出",
 }
+
+// task异常操作，0：退出当前job，1：继续执行
+const (
+	ExitTaskExceptionOperation     int32 = 0
+	ContinueTaskExceptionOperation int32 = 1
+)
