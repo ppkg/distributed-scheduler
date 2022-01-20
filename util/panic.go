@@ -6,7 +6,11 @@ import (
 )
 
 // 打印panic堆栈信息
-func PanicTrace(kb int) []byte {
+func PanicTrace(size ...int) []byte {
+	kb := 4
+	if len(size) > 0 {
+		kb = size[0]
+	}
 	s := []byte("/src/runtime/panic.go")
 	e := []byte("\ngoroutine ")
 	line := []byte("\n")

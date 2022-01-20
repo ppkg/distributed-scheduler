@@ -340,7 +340,7 @@ func (s *scheduleEngine) buildTaskFunc(job *dto.JobInfo, task InputTask) func(wo
 	return func(worker WorkerNode) {
 		defer func() {
 			if panic := recover(); panic != nil {
-				errMsg := fmt.Sprintf("运行task(%d,%s) panic:%+v,trace:%s", task.Task.Id, task.Task.Name, panic, util.PanicTrace(4))
+				errMsg := fmt.Sprintf("运行task(%d,%s) panic:%+v,trace:%s", task.Task.Id, task.Task.Name, panic, util.PanicTrace())
 				task.Task.Status = enum.ExceptionTaskStatus
 				task.Task.Message = errMsg
 				util.CancelNotify(task.Ctx, job, errMsg)
