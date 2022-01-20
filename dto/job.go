@@ -18,12 +18,19 @@ type JobInfo struct {
 	ExceptionTask *concurrentTask
 }
 
+func NewJobInfo(job *model.Job) *JobInfo {
+	return &JobInfo{
+		Job:           job,
+		TaskList:      NewConcurrentTask(),
+		ExceptionTask: NewConcurrentTask(),
+	}
+}
+
 // 初始化已完成task channel
 func (s *JobInfo) InitDoneChannel() {
 	finishTask := s.FilterFinishEndTask()
 	cacheSize := int(s.Job.Size) - len(finishTask)
 	s.DoneLatch = NewCountDownLatch(cacheSize)
-	s.ExceptionTask = NewConcurrentTask()
 }
 
 // 过滤出已完成最后task
@@ -78,10 +85,10 @@ type concurrentTask struct {
 	lock sync.RWMutex
 }
 
-func (s *concurrentTask) Append(task *model.Task) {
+func (s *concurrentTask) Append(tasks ...*model.Task) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.data = append(s.data, task)
+	s.data = append(s.data, tasks...)
 }
 
 func (s *concurrentTask) GetAll() []*model.Task {

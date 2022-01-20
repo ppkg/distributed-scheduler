@@ -384,10 +384,9 @@ func (s *ApplicationContext) loadUndoneAsyncJob() ([]*dto.JobInfo, error) {
 	list := make([]*dto.JobInfo, 0, len(jobList))
 	for _, jobItem := range jobList {
 		taskList := taskMap[jobItem.Id]
-		list = append(list, &dto.JobInfo{
-			Job:      jobItem,
-			TaskList: dto.NewConcurrentTask(taskList...),
-		})
+		job := dto.NewJobInfo(jobItem)
+		job.TaskList.Append(taskList...)
+		list = append(list, job)
 	}
 	return list, nil
 }

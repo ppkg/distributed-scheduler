@@ -99,21 +99,22 @@ func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 
 // 重新加载job信息
 func (s *jobService) reloadJobInfo(jobInfo *dto.JobInfo) (*dto.JobInfo, error) {
-	if jobInfo == nil {
-		jobInfo = &dto.JobInfo{}
-	}
-	var err error
-	jobInfo.Job, err = s.jobRepo.FindById(s.appCtx.Db, jobInfo.Job.Id)
+	job, err := s.jobRepo.FindById(s.appCtx.Db, jobInfo.Job.Id)
 	if err != nil {
-		return jobInfo, err
+		return nil, err
 	}
-	if jobInfo.Job == nil {
-		return jobInfo, errCode.ToGrpcErr(errCode.ErrJobNotFound)
+	if job == nil {
+		return nil, errCode.ToGrpcErr(errCode.ErrJobNotFound)
 	}
+
+	jobInfo = dto.NewJobInfo(job)
 	taskList, err := s.taskRepo.List(s.appCtx.Db, map[string]interface{}{
 		"jobId": jobInfo.Job.Id,
 	})
-	jobInfo.TaskList = dto.NewConcurrentTask(taskList...)
+	if err != nil {
+		return nil, err
+	}
+	jobInfo.TaskList.Append(taskList...)
 	return jobInfo, err
 }
 
