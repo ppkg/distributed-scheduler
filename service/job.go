@@ -135,7 +135,7 @@ func (s *jobService) persistence(jobInfo *dto.JobInfo) error {
 
 // 接收同步job流
 func (s *jobService) receiveSyncJobStream(stream job.JobService_SyncSubmitServer) (*dto.JobInfo, error) {
-	jobInfo := &dto.JobInfo{}
+	var jobInfo *dto.JobInfo
 	var firstPlugin string
 	var sharding int32 = 0
 	for {
@@ -144,20 +144,20 @@ func (s *jobService) receiveSyncJobStream(stream job.JobService_SyncSubmitServer
 			break
 		}
 		if err != nil {
-			return jobInfo, err
+			return nil, err
 		}
 		if len(r.PluginSet) == 0 {
-			return jobInfo, errCode.ToGrpcErr(errCode.ErrPluginSetEmpty)
+			return nil, errCode.ToGrpcErr(errCode.ErrPluginSetEmpty)
 		}
 		// 初始化job数据
-		if jobInfo.Job == nil {
-			jobInfo.Job = &model.Job{
+		if jobInfo == nil {
+			jobInfo = dto.NewJobInfo(&model.Job{
 				Name:                   r.Name,
 				PluginSet:              strings.Join(r.PluginSet, ","),
 				Label:                  r.Label,
 				Source:                 r.Source,
 				TaskExceptionOperation: r.TaskExceptionOperation,
-			}
+			})
 			firstPlugin = r.PluginSet[0]
 		}
 		jobInfo.TaskList.Append(&model.Task{
@@ -176,7 +176,7 @@ func (s *jobService) receiveSyncJobStream(stream job.JobService_SyncSubmitServer
 
 // 接收异步job流
 func (s *jobService) receiveAsyncJobStream(stream job.JobService_AsyncSubmitServer) (*dto.JobInfo, error) {
-	jobInfo := &dto.JobInfo{}
+	var jobInfo *dto.JobInfo
 	var firstPlugin string
 	var sharding int32 = 0
 	for {
@@ -185,14 +185,14 @@ func (s *jobService) receiveAsyncJobStream(stream job.JobService_AsyncSubmitServ
 			break
 		}
 		if err != nil {
-			return jobInfo, err
+			return nil, err
 		}
 		if len(r.PluginSet) == 0 {
-			return jobInfo, errCode.ToGrpcErr(errCode.ErrPluginSetEmpty)
+			return nil, errCode.ToGrpcErr(errCode.ErrPluginSetEmpty)
 		}
 		// 初始化job数据
-		if jobInfo.Job == nil {
-			jobInfo.Job = &model.Job{
+		if jobInfo == nil {
+			jobInfo = dto.NewJobInfo(&model.Job{
 				Name:                   r.Name,
 				Type:                   r.Type,
 				PluginSet:              strings.Join(r.PluginSet, ","),
@@ -200,7 +200,7 @@ func (s *jobService) receiveAsyncJobStream(stream job.JobService_AsyncSubmitServ
 				Label:                  r.Label,
 				Source:                 r.Source,
 				TaskExceptionOperation: r.TaskExceptionOperation,
-			}
+			})
 			if r.IsNotify {
 				jobInfo.Job.IsNotify = 1
 			}
