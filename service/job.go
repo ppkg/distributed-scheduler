@@ -94,6 +94,7 @@ func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 		Id:     jobInfo.Job.Id,
 		Status: jobInfo.Job.Status,
 		Result: jobInfo.Job.Result,
+		Mesage: jobInfo.Job.Message,
 	})
 }
 
