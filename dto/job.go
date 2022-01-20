@@ -13,10 +13,9 @@ import (
 type JobInfo struct {
 	DoneLatch *CountDownLatch
 	Job       *model.Job
-	TaskList  []*model.Task
-	lock      sync.Mutex
+	TaskList  *concurrentTask
 	// 已执行失败task
-	ExceptionTasks []*model.Task
+	ExceptionTask *concurrentTask
 }
 
 // 初始化已完成task channel
@@ -24,6 +23,7 @@ func (s *JobInfo) InitDoneChannel() {
 	finishTask := s.FilterFinishEndTask()
 	cacheSize := int(s.Job.Size) - len(finishTask)
 	s.DoneLatch = NewCountDownLatch(cacheSize)
+	s.ExceptionTask = NewConcurrentTask()
 }
 
 // 过滤出已完成最后task
@@ -31,18 +31,12 @@ func (s *JobInfo) FilterFinishEndTask() []*model.Task {
 	pluginList := strings.Split(s.Job.PluginSet, ",")
 	targetPlugin := pluginList[len(pluginList)-1]
 	var taskList []*model.Task
-	for _, item := range s.TaskList {
+	for _, item := range s.TaskList.GetAll() {
 		if item.Status == enum.FinishTaskStatus && item.Plugin == targetPlugin {
 			taskList = append(taskList, item)
 		}
 	}
 	return taskList
-}
-
-func (s *JobInfo) AppendSafeTask(task *model.Task) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	s.TaskList = append(s.TaskList, task)
 }
 
 // 合并数据
@@ -98,6 +92,14 @@ func (s *concurrentTask) GetAll() []*model.Task {
 	return list
 }
 
-func NewConcurrentTask() *concurrentTask {
-	return &concurrentTask{}
+func (s *concurrentTask) Size() int {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	return len(s.data)
+}
+
+func NewConcurrentTask(list ...*model.Task) *concurrentTask {
+	return &concurrentTask{
+		data: list,
+	}
 }

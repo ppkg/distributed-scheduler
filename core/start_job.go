@@ -82,12 +82,21 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 		endTasks := jobInfo.FilterFinishEndTask()
 		if jobInfo.Job.Size == int32(len(endTasks)) {
 			jobInfo.Job.Status = enum.FinishJobStatus
+		} else {
+			jobInfo.Job.Status = enum.BusinessExceptionJobStatus
+			errTaskList := jobInfo.ExceptionTask.GetAll()
+			msgList := make([]string, 0)
+			msgList = append(msgList, fmt.Sprintf("共有%d个task执行失败", len(errTaskList)))
+			for _, item := range errTaskList {
+				if item.Message == "" {
+					continue
+				}
+				msgList = append(msgList, fmt.Sprintf("task(%d,%s)->%s", item.Id, item.Name, item.Message))
+			}
+			jobInfo.Job.Message = strings.Join(msgList, ";")
 		}
-	}
-
-	// 记录取消原因
-	switch cancelParam.State {
-	case enum.ExceptionCancelState:
+	} else if cancelParam.State == enum.ExceptionCancelState {
+		// 记录取消原因
 		jobInfo.Job.Message = cancelParam.Reason
 	}
 
@@ -153,7 +162,8 @@ func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.Job
 		return nil
 	}
 	var result []*model.Task
-	list := util.FilterTaskByPlugin(job.TaskList, pluginSet[pos])
+	taskList := job.TaskList.GetAll()
+	list := util.FilterTaskByPlugin(taskList, pluginSet[pos])
 	if len(list) == 0 {
 		return result
 	}
@@ -168,7 +178,7 @@ func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.Job
 			continue
 		}
 
-		nextPluginTaskList := util.FilterTaskByPlugin(job.TaskList, pluginSet[pos+1])
+		nextPluginTaskList := util.FilterTaskByPlugin(taskList, pluginSet[pos+1])
 		isFound := false
 		for _, nextTask := range nextPluginTaskList {
 			if nextTask.Sharding == item.Sharding {
@@ -190,22 +200,49 @@ func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.Job
 }
 
 // 任务执行完回调通知
-func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo, task *model.Task) func() {
-	return func() {
+func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo, task *model.Task) func(err error) {
+	return func(err error) {
+		if err != nil {
+			// 推送失败
+			errMsg := fmt.Sprintf("推送task(%d,%s)失败,err:%+v", task.Id, task.Name, err)
+			task.Status = enum.ExceptionTaskStatus
+			task.Message = errMsg
+			glog.Errorf("ApplicationContext/taskCallback %s", errMsg)
+
+			if s.isNeedCancelJob(job, task) {
+				job.Job.Status = enum.PushTaskExceptionJobStatus
+				util.CancelNotify(ctx, job, errMsg)
+			}
+		}
+
 		// 保存任务状态
 		task.FinishTime = time.Now()
-		err := s.taskRepo.UpdateStatus(s.Db, task)
+		err = s.taskRepo.UpdateStatus(s.Db, task)
 		if err != nil {
-			glog.Errorf("ApplicationContext/taskCallback 持久化task状态失败,id:%d,err:%+v", task.Id, err)
-			util.CancelNotify(ctx, job, fmt.Sprintf("持久化task(%d,%s)状态失败,%+v", task.Id, task.Name, err))
-			job.Job.Status = enum.SystemExceptionJobStatus
+			errMsg := fmt.Sprintf("持久化task(%d,%s)状态失败,%+v", task.Id, task.Name, err)
+			task.Status = enum.ExceptionTaskStatus
+			task.Message = errMsg
+			glog.Errorf("ApplicationContext/taskCallback %s", errMsg)
+
+			if s.isNeedCancelJob(job, task) {
+				job.Job.Status = enum.SystemExceptionJobStatus
+				util.CancelNotify(ctx, job, errMsg)
+			}
 			return
 		}
 
 		// 判断任务是否执行异常，异常则通知其他task停止执行
 		if task.Status != enum.FinishTaskStatus {
-			util.CancelNotify(ctx, job, fmt.Sprintf("task(%d,%s)业务处理失败,%s", task.Id, task.Name, task.Message))
-			job.Job.Status = enum.BusinessExceptionJobStatus
+			errMsg := fmt.Sprintf("task(%d,%s)业务处理失败,%s", task.Id, task.Name, task.Message)
+			if task.Message == "" {
+				task.Message = "业务处理失败"
+			}
+			glog.Errorf("ApplicationContext/taskCallback %s", errMsg)
+
+			if s.isNeedCancelJob(job, task) {
+				job.Job.Status = enum.BusinessExceptionJobStatus
+				util.CancelNotify(ctx, job, errMsg)
+			}
 			return
 		}
 
@@ -235,10 +272,20 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 		if newTask == nil {
 			return
 		}
-		job.AppendSafeTask(newTask)
+		job.TaskList.Append(newTask)
 		// 调度新的task
 		s.Scheduler.DispatchTask(job, s.buildTasks(ctx, job, []*model.Task{newTask})...)
 	}
+}
+
+// 当task执行异常是否需要取消job，如果job为继续执行模式则其他task会继续执行下去
+func (s *ApplicationContext) isNeedCancelJob(job *dto.JobInfo, task *model.Task) bool {
+	if job.Job.TaskExceptionOperation == enum.ExitTaskExceptionOperation {
+		return true
+	}
+	job.ExceptionTask.Append(task)
+	job.DoneLatch.Done()
+	return false
 }
 
 // 创建新task
@@ -336,9 +383,10 @@ func (s *ApplicationContext) loadUndoneAsyncJob() ([]*dto.JobInfo, error) {
 
 	list := make([]*dto.JobInfo, 0, len(jobList))
 	for _, jobItem := range jobList {
+		taskList := taskMap[jobItem.Id]
 		list = append(list, &dto.JobInfo{
 			Job:      jobItem,
-			TaskList: taskMap[jobItem.Id],
+			TaskList: dto.NewConcurrentTask(taskList...),
 		})
 	}
 	return list, nil

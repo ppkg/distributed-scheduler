@@ -110,9 +110,10 @@ func (s *jobService) reloadJobInfo(jobInfo *dto.JobInfo) (*dto.JobInfo, error) {
 	if jobInfo.Job == nil {
 		return jobInfo, errCode.ToGrpcErr(errCode.ErrJobNotFound)
 	}
-	jobInfo.TaskList, err = s.taskRepo.List(s.appCtx.Db, map[string]interface{}{
+	taskList, err := s.taskRepo.List(s.appCtx.Db, map[string]interface{}{
 		"jobId": jobInfo.Job.Id,
 	})
+	jobInfo.TaskList = dto.NewConcurrentTask(taskList...)
 	return jobInfo, err
 }
 
@@ -123,10 +124,11 @@ func (s *jobService) persistence(jobInfo *dto.JobInfo) error {
 		if err != nil {
 			return err
 		}
-		for _, item := range jobInfo.TaskList {
+		taskList := jobInfo.TaskList.GetAll()
+		for _, item := range taskList {
 			item.JobId = jobInfo.Job.Id
 		}
-		return s.taskRepo.BatchSave(tx, jobInfo.TaskList)
+		return s.taskRepo.BatchSave(tx, taskList)
 	})
 }
 
@@ -157,7 +159,7 @@ func (s *jobService) receiveSyncJobStream(stream job.JobService_SyncSubmitServer
 			}
 			firstPlugin = r.PluginSet[0]
 		}
-		jobInfo.AppendSafeTask(&model.Task{
+		jobInfo.TaskList.Append(&model.Task{
 			Sharding: sharding,
 			Name:     fmt.Sprintf("%s-%d", jobInfo.Job.Name, sharding),
 			Input:    r.Data,
@@ -166,7 +168,7 @@ func (s *jobService) receiveSyncJobStream(stream job.JobService_SyncSubmitServer
 		sharding++
 	}
 
-	jobInfo.Job.Size = int32(len(jobInfo.TaskList))
+	jobInfo.Job.Size = int32(jobInfo.TaskList.Size())
 
 	return jobInfo, nil
 }
@@ -203,7 +205,7 @@ func (s *jobService) receiveAsyncJobStream(stream job.JobService_AsyncSubmitServ
 			}
 			firstPlugin = r.PluginSet[0]
 		}
-		jobInfo.AppendSafeTask(&model.Task{
+		jobInfo.TaskList.Append(&model.Task{
 			Sharding: sharding,
 			Name:     fmt.Sprintf("%s-%d", jobInfo.Job.Name, sharding),
 			Input:    r.Data,
@@ -212,7 +214,7 @@ func (s *jobService) receiveAsyncJobStream(stream job.JobService_AsyncSubmitServ
 		sharding++
 	}
 
-	jobInfo.Job.Size = int32(len(jobInfo.TaskList))
+	jobInfo.Job.Size = int32(jobInfo.TaskList.Size())
 
 	return jobInfo, nil
 }

@@ -248,7 +248,7 @@ func (s *scheduleEngine) predicateWorker(name string) ([]WorkerNode, error) {
 type InputTask struct {
 	Ctx      context.Context
 	Task     *model.Task
-	Callback func()
+	Callback func(err error)
 }
 
 type workerConnMap struct {
@@ -355,17 +355,7 @@ func (s *scheduleEngine) buildTaskFunc(job *dto.JobInfo, task InputTask) func(wo
 			glog.Warningf("退出当前任务(%d,%s)，其他任务执行失败:%s", task.Task.Id, task.Task.Name, cancelParam.Reason)
 			return
 		default:
-			err := s.processTask(worker, task.Task)
-			if err != nil {
-				// 推送失败
-				errMsg := fmt.Sprintf("推送task(%d,%s)失败,err:%+v", task.Task.Id, task.Task.Name, err)
-				task.Task.Status = enum.ExceptionTaskStatus
-				task.Task.Message = errMsg
-				util.CancelNotify(task.Ctx, job, errMsg)
-				job.Job.Status = enum.PushTaskExceptionJobStatus
-				glog.Error(errMsg)
-			}
-			task.Callback()
+			task.Callback(s.processTask(worker, task.Task))
 		}
 	}
 }
