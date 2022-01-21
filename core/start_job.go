@@ -351,7 +351,7 @@ func (s *ApplicationContext) loadUndoneAsyncJob() ([]*dto.JobInfo, error) {
 		"startTime": startTime,
 		"endTime":   endTime,
 		"isAsync":   1,
-		"inStatus":  []enum.JobStatus{enum.PendingJobStatus, enum.DoingJobStatus, enum.SystemExceptionJobStatus, enum.PushTaskExceptionJobStatus, enum.NotifyExceptionJobStatus},
+		"inStatus":  []enum.JobStatus{enum.PendingJobStatus, enum.DoingJobStatus, enum.SystemExceptionJobStatus, enum.PushTaskExceptionJobStatus, enum.BusinessExceptionJobStatus, enum.NotifyExceptionJobStatus},
 	})
 	if err != nil {
 		return nil, err
@@ -360,31 +360,15 @@ func (s *ApplicationContext) loadUndoneAsyncJob() ([]*dto.JobInfo, error) {
 		return nil, nil
 	}
 
-	jobIds := make([]int64, 0, len(jobList))
-	for _, jobItem := range jobList {
-		_, ok := s.jobContainer.Get(jobItem.Id)
-		if ok {
-			continue
-		}
-		jobIds = append(jobIds, jobItem.Id)
-	}
-
-	taskList, err := s.taskRepo.List(s.Db, map[string]interface{}{
-		"jobIds": jobIds,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	taskMap := make(map[int64][]*model.Task)
-	for _, item := range taskList {
-		taskMap[item.JobId] = append(taskMap[item.JobId], item)
-	}
-
 	list := make([]*dto.JobInfo, 0, len(jobList))
-	for _, jobItem := range jobList {
-		taskList := taskMap[jobItem.Id]
-		job := dto.NewJobInfo(jobItem)
+	for _, item := range jobList {
+		taskList, err := s.taskRepo.List(s.Db, map[string]interface{}{
+			"jobId": item.Id,
+		})
+		if err != nil {
+			return nil, err
+		}
+		job := dto.NewJobInfo(item)
 		job.TaskList.Append(taskList...)
 		list = append(list, job)
 	}
