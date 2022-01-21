@@ -70,6 +70,10 @@ func (s *ApplicationContext) watchRaftLeader() {
 		if isLeader {
 			s.updateCurrentNacosRole(enum.LeaderRaftRole)
 			glog.Infof("ApplicationContext/watchRaftLeader 当前raft节点(%s,%s)获取leader身份", s.conf.Raft.NodeId, s.getPeerAddr())
+
+			// 更新配置中心leaderState值
+			s.updateLeaderStateConfig()
+
 			time.AfterFunc(time.Minute, func() {
 				// 1分钟后检查是否满足重启job条件
 				if !s.IsLeaderNode() {
@@ -77,6 +81,7 @@ func (s *ApplicationContext) watchRaftLeader() {
 				}
 				s.restartUndoneAsyncJob()
 			})
+			// 拉取并更新worker节点信息
 			s.pullAllWorker()
 			continue
 		}
@@ -88,6 +93,14 @@ func (s *ApplicationContext) watchRaftLeader() {
 		}
 		s.jobContainer.RemoveAll()
 	}
+}
+
+// 更新配置中心leaderState值
+func (s *ApplicationContext) updateLeaderStateConfig() {
+	_, _ = s.configClient.PublishConfig(vo.ConfigParam{
+		DataId:  s.conf.LeaderStateKey,
+		Group:   s.conf.Nacos.ServiceGroup,
+		Content: fmt.Sprintf("%s,%s", s.conf.Raft.NodeId, time.Now().Format("2006-01-02 15:04:05"))})
 }
 
 // 初始化默认配置
@@ -140,7 +153,8 @@ func (s *ApplicationContext) initDefaultConfig() {
 		s.conf.Nacos.ServiceGroup = "DEFAULT_GROUP"
 	}
 	s.conf.Nacos.Namespace = os.Getenv("NACOS_NAMESPACE")
-	s.conf.Nacos.WorkerServiceName = "distributed-workder"
+	s.conf.WorkerServiceName = "distributed-workder"
+	s.conf.LeaderStateKey = "leaderState"
 }
 
 func (s *ApplicationContext) appendNacosAddrConfig(addr string) {
@@ -208,7 +222,7 @@ func (s *ApplicationContext) Run() error {
 
 // 全量拉取worker服务信息然后进行更新worker索引
 func (s *ApplicationContext) pullAllWorker() {
-	list := s.getServiceList(s.conf.Nacos.WorkerServiceName)
+	list := s.getServiceList(s.conf.WorkerServiceName)
 	nodeList := make([]WorkerNode, 0, len(list))
 	for _, item := range list {
 		nodeList = append(nodeList, WorkerNode{
@@ -498,7 +512,7 @@ func (s *ApplicationContext) initNacos() error {
 // 监听worker服务发现
 func (s *ApplicationContext) watchWorkerService() error {
 	return s.namingClient.Subscribe(&vo.SubscribeParam{
-		ServiceName: s.conf.Nacos.WorkerServiceName,
+		ServiceName: s.conf.WorkerServiceName,
 		GroupName:   s.conf.Nacos.ServiceGroup,
 		Clusters: []string{
 			s.conf.Nacos.ClusterName,
@@ -592,6 +606,10 @@ type Config struct {
 	PeerIp string
 	// 应用监听端口号
 	Port int
+	// 工作节点服务名
+	WorkerServiceName string
+	// raft leader配置中心key
+	LeaderStateKey string
 
 	Raft RaftConfig
 	// nacos配置
@@ -608,8 +626,6 @@ type RaftConfig struct {
 }
 
 type NacosConfig struct {
-	// 工作节点服务名
-	WorkerServiceName string
 	// nacos服务发现的配置参数
 	Addrs        []string
 	Ports        []int
