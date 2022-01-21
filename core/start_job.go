@@ -195,6 +195,7 @@ func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.Job
 			continue
 		}
 		result = append(result, newTask)
+		job.TaskList.Append(newTask)
 	}
 	return result
 }
