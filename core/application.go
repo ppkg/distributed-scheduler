@@ -169,11 +169,16 @@ func (s *ApplicationContext) appendNacosAddrConfig(addr string) {
 func (s *ApplicationContext) Run() error {
 	// 初始化调度器引擎
 	s.Scheduler = NewScheduler(s.conf.SchedulerThreadCount)
+	err := s.Scheduler.Init()
+	if err != nil {
+		glog.Errorf("Application/run 初始化调度器异常,err:%v", err)
+		return err
+	}
 	// 初始化job容器
 	s.jobContainer = NewJobContainer()
 
 	// 注册服务(服务发现)
-	err := s.initNacos()
+	err = s.initNacos()
 	if err != nil {
 		glog.Errorf("Application/run 注册服务异常,err:%v", err)
 		return err

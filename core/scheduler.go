@@ -37,6 +37,11 @@ type scheduleEngine struct {
 
 	// 分发队列
 	dispatchQueue chan func(worker WorkerNode)
+
+	// 插件限流功能
+	limitRateConf     map[string]int
+	limitRatePoolMap  map[string]*ants.Pool
+	limitRateQueueMap map[string]chan func()
 }
 
 func NewScheduler(workerThread int) *scheduleEngine {
@@ -48,8 +53,38 @@ func NewScheduler(workerThread int) *scheduleEngine {
 		roundRobinMap:     make(map[string]*concurrentUint32),
 		workerConns:       NewWorkerConns(),
 		dispatchQueue:     make(chan func(worker WorkerNode), 100000000),
+		limitRateConf:     make(map[string]int),
+		limitRatePoolMap:  make(map[string]*ants.Pool),
+		limitRateQueueMap: make(map[string]chan func()),
 	}
 	return engine
+}
+
+// 指定插件限流
+func (s *scheduleEngine) PluginLimitRate(pluginName string, size int) {
+	s.limitRateConf[pluginName] = size
+}
+
+// 调度器初始化操作
+func (s *scheduleEngine) Init() error {
+	for name, size := range s.limitRateConf {
+		pool, err := ants.NewPool(size)
+		if err != nil {
+			glog.Errorf("scheduleEngine/Init 初始化限流池异常,err:%+v", err)
+			return err
+		}
+		s.limitRatePoolMap[name] = pool
+		s.limitRateQueueMap[name] = make(chan func(), 10000000)
+		go s.startLimitRateWork(name)
+	}
+	return nil
+}
+
+// 开启限流工作线程
+func (s *scheduleEngine) startLimitRateWork(name string) {
+	for fn := range s.limitRateQueueMap[name] {
+		s.limitRatePoolMap[name].Submit(fn)
+	}
 }
 
 func (s *scheduleEngine) AddWorker(worker WorkerNode) error {
@@ -325,17 +360,72 @@ func (s *scheduleEngine) getAndIncr(key string) uint32 {
 	return rs
 }
 
-// 添加需要调度的task
+// 分发需要调度的task
 func (s *scheduleEngine) DispatchTask(job *dto.JobInfo, tasks ...InputTask) {
 	if len(tasks) == 0 {
 		return
 	}
 	for _, item := range tasks {
-		s.dispatchQueue <- s.buildTaskFunc(job, item)
+		limitQueue, ok := s.limitRateQueueMap[item.Task.Plugin]
+		if !ok {
+			s.dispatchQueue <- s.buildTaskFunc(job, item)
+			continue
+		}
+		limitQueue <- s.buildLimitRateTaskFunc(job, item)
 	}
 }
 
-// 构建task队列入参
+// 构建限流task
+func (s *scheduleEngine) buildLimitRateTaskFunc(job *dto.JobInfo, task InputTask) func() {
+	return func() {
+		defer func() {
+			if panic := recover(); panic != nil {
+				errMsg := fmt.Sprintf("运行task(%d,%s) panic:%+v,trace:%s", task.Task.Id, task.Task.Name, panic, util.PanicTrace())
+				task.Task.Status = int32(enum.ExceptionTaskStatus)
+				task.Task.Message = errMsg
+				util.CancelNotify(task.Ctx, job, errMsg)
+				job.Job.Status = int32(enum.SystemExceptionJobStatus)
+				glog.Errorf("scheduleEngine/buildLimitRateTaskFunc %s", errMsg)
+			}
+		}()
+		select {
+		case <-task.Ctx.Done():
+			cancelParam := task.Ctx.Value(dto.CancelTaskKey{}).(*dto.CancelTaskParam)
+			// 如果有其他任务处理异常则直接跳过，不执行任何处理
+			glog.Warningf("scheduleEngine/buildLimitRateTaskFunc 退出当前任务(%d,%s)，其他任务执行失败:%s", task.Task.Id, task.Task.Name, cancelParam.Reason)
+			return
+		default:
+			task.Callback(s.processLimitRateTask(task.Task))
+		}
+	}
+}
+
+// 限流task推送处理
+func (s *scheduleEngine) processLimitRateTask(task *model.Task) error {
+	tryCount := 4
+	workers, err := s.predicateWorker(task.Plugin)
+	if err != nil {
+		glog.Errorf("ScheduleEngine/processLimitRateTask 预选worker节点异常,taskId:%d,err:%+v", task.Id, err)
+		return err
+	}
+
+	// 优选worker时排除掉调度出错的worker
+	excludeWorkers := []WorkerNode{}
+	// 推送任务,如果推送失败则重推
+	for i := 0; i < tryCount; i++ {
+		myWorker := s.preferWorker(task.Plugin, workers, excludeWorkers...)
+		err = s.pushTask(myWorker, task)
+		if err == nil {
+			return nil
+		}
+		excludeWorkers = s.appendExcludeWorker(excludeWorkers, myWorker)
+		glog.Errorf("ScheduleEngine/processLimitRateTask 第%d次推送任务异常,worker:%s,taskId:%d,err:%+v", i+1, kit.JsonEncode(myWorker), task.Id, err)
+	}
+
+	return err
+}
+
+// 构建普通task队列入参
 func (s *scheduleEngine) buildTaskFunc(job *dto.JobInfo, task InputTask) func(worker WorkerNode) {
 	return func(worker WorkerNode) {
 		defer func() {
@@ -345,14 +435,14 @@ func (s *scheduleEngine) buildTaskFunc(job *dto.JobInfo, task InputTask) func(wo
 				task.Task.Message = errMsg
 				util.CancelNotify(task.Ctx, job, errMsg)
 				job.Job.Status = int32(enum.SystemExceptionJobStatus)
-				glog.Error(errMsg)
+				glog.Errorf("scheduleEngine/buildTaskFunc %s", errMsg)
 			}
 		}()
 		select {
 		case <-task.Ctx.Done():
 			cancelParam := task.Ctx.Value(dto.CancelTaskKey{}).(*dto.CancelTaskParam)
 			// 如果有其他任务处理异常则直接跳过，不执行任何处理
-			glog.Warningf("退出当前任务(%d,%s)，其他任务执行失败:%s", task.Task.Id, task.Task.Name, cancelParam.Reason)
+			glog.Warningf("scheduleEngine/buildTaskFunc 退出当前任务(%d,%s)，其他任务执行失败:%s", task.Task.Id, task.Task.Name, cancelParam.Reason)
 			return
 		default:
 			task.Callback(s.processTask(worker, task.Task))
