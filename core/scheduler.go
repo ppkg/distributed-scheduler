@@ -26,7 +26,7 @@ type scheduleEngine struct {
 	// worker节点所支持job回调通知索引组件
 	jobNotifyIndexer *workerIndexer
 	lock             sync.RWMutex
-	roundRobinMap    map[string]*safeUint32
+	roundRobinMap    map[string]*concurrentUint32
 
 	// worker调度器线程数
 	workerThreadCount int
@@ -45,7 +45,7 @@ func NewScheduler(workerThread int) *scheduleEngine {
 		workerPools:       NewWorkerPools(),
 		pluginIndexer:     NewWorkerIndexer(),
 		jobNotifyIndexer:  NewWorkerIndexer(),
-		roundRobinMap:     make(map[string]*safeUint32),
+		roundRobinMap:     make(map[string]*concurrentUint32),
 		workerConns:       NewWorkerConns(),
 		dispatchQueue:     make(chan func(worker WorkerNode), 100000000),
 	}
@@ -295,12 +295,12 @@ func (s *workerConnMap) Remove(worker WorkerNode) {
 	_ = conn.Close()
 }
 
-type safeUint32 struct {
+type concurrentUint32 struct {
 	num  uint32
 	lock sync.Mutex
 }
 
-func (s *safeUint32) GetAndIncr() uint32 {
+func (s *concurrentUint32) GetAndIncr() uint32 {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	cur := s.num
@@ -319,7 +319,7 @@ func (s *scheduleEngine) getAndIncr(key string) uint32 {
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	val = &safeUint32{}
+	val = &concurrentUint32{}
 	rs := val.GetAndIncr()
 	s.roundRobinMap[key] = val
 	return rs
