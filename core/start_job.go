@@ -337,7 +337,11 @@ func (s *ApplicationContext) createNewTasks(ctx context.Context, job *dto.JobInf
 		})
 	}
 	// 持久化新task任务
-	err = s.taskRepo.BatchSave(s.Db, list)
+	if len(list) == 1 {
+		err = s.taskRepo.Save(s.Db, list[0])
+	} else {
+		err = s.taskRepo.BatchSave(s.Db, list)
+	}
 	if err != nil {
 		errMsg := fmt.Sprintf("持久化新产生task异常,plugin:%s,新task:%s,%+v", plugin, kit.JsonEncode(list), err)
 		task.Status = int32(enum.ExceptionTaskStatus)
@@ -350,22 +354,24 @@ func (s *ApplicationContext) createNewTasks(ctx context.Context, job *dto.JobInf
 		}
 		return nil
 	}
-	list, err = s.taskRepo.List(s.Db, map[string]interface{}{
-		"jobId":    job.Job.Id,
-		"sharding": task.Sharding,
-		"plugin":   plugin,
-	})
-	if err != nil {
-		errMsg := fmt.Sprintf("查询刚刚创建新task异常,plugin:%s,jobId:%d,err:%+v", plugin, job.Job.Id, err)
-		task.Status = int32(enum.ExceptionTaskStatus)
-		task.Message = errMsg
-		glog.Errorf("ApplicationContext/createNewTask %s", errMsg)
+	if len(list) > 1 {
+		list, err = s.taskRepo.List(s.Db, map[string]interface{}{
+			"jobId":    job.Job.Id,
+			"sharding": task.Sharding,
+			"plugin":   plugin,
+		})
+		if err != nil {
+			errMsg := fmt.Sprintf("查询刚刚创建新task异常,plugin:%s,jobId:%d,err:%+v", plugin, job.Job.Id, err)
+			task.Status = int32(enum.ExceptionTaskStatus)
+			task.Message = errMsg
+			glog.Errorf("ApplicationContext/createNewTask %s", errMsg)
 
-		if s.isNeedCancelJob(job, task) {
-			util.CancelNotify(ctx, job, errMsg)
-			job.Job.Status = int32(enum.SystemExceptionJobStatus)
+			if s.isNeedCancelJob(job, task) {
+				util.CancelNotify(ctx, job, errMsg)
+				job.Job.Status = int32(enum.SystemExceptionJobStatus)
+			}
+			return nil
 		}
-		return nil
 	}
 	return list
 }
