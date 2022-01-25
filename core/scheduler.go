@@ -175,8 +175,12 @@ func (s *scheduleEngine) IsEmptyWorker() bool {
 // 推送任务
 func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error {
 	tryCount := 3
+	plugin := task.Plugin
+	if util.IsParallelTask(plugin) {
+		plugin = task.SubPlugin
+	}
 	// 优先给自己worker执行,不过要先判断自己是否支持当前插件运行
-	if util.IsSupportHandler(worker.PluginSet, task.Plugin) {
+	if util.IsSupportHandler(worker.PluginSet, plugin) {
 		err := s.pushTask(worker, task)
 		if err == nil {
 			return nil
@@ -187,7 +191,7 @@ func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error 
 	}
 
 	// 自己worker执行失败则交给其他worker来执行
-	workers, err := s.predicateWorker(task.Plugin)
+	workers, err := s.predicateWorker(plugin)
 	if err != nil {
 		glog.Errorf("ScheduleEngine/processTask 预选worker节点异常,taskId:%d,err:%+v", task.Id, err)
 		return err
@@ -197,7 +201,7 @@ func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error 
 	excludeWorkers := []WorkerNode{worker}
 	// 推送任务,如果推送失败则重推
 	for i := 0; i < tryCount; i++ {
-		myWorker := s.preferWorker(task.Plugin, workers, excludeWorkers...)
+		myWorker := s.preferWorker(plugin, workers, excludeWorkers...)
 		err = s.pushTask(myWorker, task)
 		if err == nil {
 			return nil
@@ -403,7 +407,11 @@ func (s *scheduleEngine) buildLimitRateTaskFunc(job *dto.JobInfo, task InputTask
 // 限流task推送处理
 func (s *scheduleEngine) processLimitRateTask(task *model.Task) error {
 	tryCount := 4
-	workers, err := s.predicateWorker(task.Plugin)
+	plugin := task.Plugin
+	if util.IsParallelTask(plugin) {
+		plugin = task.SubPlugin
+	}
+	workers, err := s.predicateWorker(plugin)
 	if err != nil {
 		glog.Errorf("ScheduleEngine/processLimitRateTask 预选worker节点异常,taskId:%d,err:%+v", task.Id, err)
 		return err
@@ -413,7 +421,7 @@ func (s *scheduleEngine) processLimitRateTask(task *model.Task) error {
 	excludeWorkers := []WorkerNode{}
 	// 推送任务,如果推送失败则重推
 	for i := 0; i < tryCount; i++ {
-		myWorker := s.preferWorker(task.Plugin, workers, excludeWorkers...)
+		myWorker := s.preferWorker(plugin, workers, excludeWorkers...)
 		err = s.pushTask(myWorker, task)
 		if err == nil {
 			return nil
