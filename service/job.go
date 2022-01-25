@@ -177,10 +177,9 @@ func (s *jobService) receiveSyncJobStream(stream job.JobService_SyncSubmitServer
 				SubPlugin: item,
 			})
 		}
+		jobInfo.Job.Size++
 		sharding++
 	}
-
-	jobInfo.Job.Size = int32(jobInfo.TaskList.Size())
 
 	return jobInfo, nil
 }
@@ -234,12 +233,10 @@ func (s *jobService) receiveAsyncJobStream(stream job.JobService_AsyncSubmitServ
 				SubPlugin: item,
 			})
 		}
+		jobInfo.Job.Size++
 
 		sharding++
 	}
-
-	jobInfo.Job.Size = int32(jobInfo.TaskList.Size())
-
 	return jobInfo, nil
 }
 
