@@ -139,7 +139,7 @@ func (s *JobInfo) reduce(taskList []*model.Task) (string, error) {
 	}
 
 	if len(result) == 0 {
-		return "", nil
+		return "[]", nil
 	}
 
 	data, err := json.Marshal(result)

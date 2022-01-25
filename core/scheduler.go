@@ -374,7 +374,11 @@ func (s *scheduleEngine) DispatchTask(job *dto.JobInfo, tasks ...InputTask) {
 		return
 	}
 	for _, item := range tasks {
-		limitQueue, ok := s.limitRateQueueMap[item.Task.Plugin]
+		plugin := item.Task.Plugin
+		if dto.IsParallelTask(plugin) {
+			plugin = item.Task.SubPlugin
+		}
+		limitQueue, ok := s.limitRateQueueMap[plugin]
 		if !ok {
 			s.dispatchQueue <- s.buildTaskFunc(job, item)
 			continue
