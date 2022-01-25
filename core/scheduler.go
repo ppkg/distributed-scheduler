@@ -234,13 +234,17 @@ func (s *scheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
 	}
 
 	client := task.NewTaskServiceClient(conn)
-	resp, err := client.SyncSubmit(context.Background(), &task.SubmitRequest{
+	req := &task.SubmitRequest{
 		Id:     t.Id,
 		JobId:  t.JobId,
 		Name:   t.Name,
 		Plugin: t.Plugin,
 		Data:   t.Input,
-	})
+	}
+	if dto.IsParallelTask(req.Plugin) {
+		req.Plugin = t.SubPlugin
+	}
+	resp, err := client.SyncSubmit(context.Background(), req)
 
 	if err != nil {
 		return err

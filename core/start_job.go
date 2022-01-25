@@ -61,7 +61,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	if s.Scheduler.IsEmptyWorker() {
 		jobInfo.Job.Status = int32(enum.SystemExceptionJobStatus)
 		jobInfo.Job.Message = fmt.Sprintf("系统没有worker节点提供给job(%d,%s)调度执行", jobInfo.Job.Id, jobInfo.Job.Name)
-		glog.Errorf("ApplicationContext/StartJob %s",jobInfo.Job.Message)
+		glog.Errorf("ApplicationContext/StartJob %s", jobInfo.Job.Message)
 		err = s.jobRepo.UpdateStatus(s.Db, jobInfo.Job)
 		if err != nil {
 			glog.Errorf("ApplicationContext/StartJob 更新job状态异常,id:%d,err:%+v", jobInfo.Job.Id, err)
@@ -304,10 +304,8 @@ func (s *ApplicationContext) isNeedCancelJob(job *dto.JobInfo, task *model.Task)
 // 创建新task
 func (s *ApplicationContext) createNewTasks(ctx context.Context, job *dto.JobInfo, task *model.Task, plugin string) []*model.Task {
 	var err error
-	var subPlugins []string
 	input := task.Output
-	if dto.IsParallelTask(plugin) {
-		subPlugins = dto.SplitParallelPlugin(plugin)
+	if dto.IsParallelTask(task.Plugin) {
 		input, err = job.ReduceParallel(task.Plugin, task.Sharding)
 		if err != nil {
 			errMsg := fmt.Sprintf("合并并行task结果异常,当前task:%s,err:%+v", kit.JsonEncode(task), err)
@@ -321,8 +319,11 @@ func (s *ApplicationContext) createNewTasks(ctx context.Context, job *dto.JobInf
 			}
 			return nil
 		}
-	} else {
-		subPlugins = append(subPlugins, "")
+	}
+
+	subPlugins := []string{""}
+	if dto.IsParallelTask(plugin) {
+		subPlugins = dto.SplitParallelPlugin(plugin)
 	}
 	// 创建新task并放入调度器执行
 	list := make([]*model.Task, 0, len(subPlugins))
