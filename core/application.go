@@ -59,6 +59,8 @@ func NewApp(opts ...Option) *ApplicationContext {
 		m(&instance.conf)
 	}
 	instance.initGrpc()
+	// 实例化调度引擎
+	instance.Scheduler = NewScheduler(instance.conf.SchedulerThreadCount)
 	return instance
 }
 
@@ -167,18 +169,11 @@ func (s *ApplicationContext) appendNacosAddrConfig(addr string) {
 }
 
 func (s *ApplicationContext) Run() error {
-	// 初始化调度器引擎
-	s.Scheduler = NewScheduler(s.conf.SchedulerThreadCount)
-	err := s.Scheduler.Init()
-	if err != nil {
-		glog.Errorf("Application/run 初始化调度器异常,err:%v", err)
-		return err
-	}
 	// 初始化job容器
 	s.jobContainer = NewJobContainer()
 
 	// 注册服务(服务发现)
-	err = s.initNacos()
+	err := s.initNacos()
 	if err != nil {
 		glog.Errorf("Application/run 注册服务异常,err:%v", err)
 		return err
@@ -214,6 +209,13 @@ func (s *ApplicationContext) Run() error {
 
 	// 监控raft身份变更并及时处理
 	go s.watchRaftLeader()
+
+	// 初始化调度器引擎
+	err = s.Scheduler.Init()
+	if err != nil {
+		glog.Errorf("Application/run 初始化调度器异常,err:%v", err)
+		return err
+	}
 
 	glog.Infof("调度器(%s)已启动,endpoint地址:%s", s.conf.AppName, s.getPeerAddr())
 	// 初始化grpc服务
