@@ -37,18 +37,41 @@ func (s *JobInfo) InitDoneChannel() {
 func (s *JobInfo) FilterFinishEndTask() []*model.Task {
 	pluginList := strings.Split(s.Job.PluginSet, ",")
 	targetPlugin := pluginList[len(pluginList)-1]
+	sharding := int32(len(pluginList) - 1)
 	var taskList []*model.Task
 	for _, item := range s.TaskList.GetAll() {
-		if enum.TaskStatus(item.Status) == enum.FinishTaskStatus && item.Plugin == targetPlugin {
+		if enum.TaskStatus(item.Status) == enum.FinishTaskStatus && item.Plugin == targetPlugin && item.Sharding == sharding {
 			taskList = append(taskList, item)
 		}
 	}
 	return taskList
 }
 
+// 过滤出已完成的并行task
+func (s *JobInfo) FilterFinishParallelTask(plugin string, sharding int32) []*model.Task {
+	var list []*model.Task
+	for _, item := range s.TaskList.GetAll() {
+		if enum.TaskStatus(item.Status) == enum.FinishTaskStatus && item.Plugin == plugin && item.Sharding == sharding {
+			list = append(list, item)
+		}
+	}
+	return list
+}
+
+// 判断并行task是否都完成了
+func (s *JobInfo) IsFinishParallelTask(plugin string, sharding int32) bool {
+	list := s.FilterFinishParallelTask(plugin, sharding)
+	subPlugins := strings.Split(plugin, enum.ParallelTaskSeparator)
+	return len(subPlugins) == len(list)
+}
+
 // 合并数据
 func (s *JobInfo) Reduce() (string, error) {
 	taskList := s.FilterFinishEndTask()
+	return s.reduce(taskList)
+}
+
+func (s *JobInfo) reduce(taskList []*model.Task) (string, error) {
 	var result []interface{}
 	var err error
 	for _, task := range taskList {
@@ -59,7 +82,7 @@ func (s *JobInfo) Reduce() (string, error) {
 		var output interface{}
 		err = json.Unmarshal([]byte(task.Output), &output)
 		if err != nil {
-			return "", fmt.Errorf("JobInfo/Reduce 反序列化异常,data:%s,err:%+v", task.Output, err)
+			return "", fmt.Errorf("合并数据时反序列化异常,data:%s,err:%+v", task.Output, err)
 		}
 		switch rs := output.(type) {
 		case []interface{}:
@@ -75,9 +98,15 @@ func (s *JobInfo) Reduce() (string, error) {
 
 	data, err := json.Marshal(result)
 	if err != nil {
-		return "", fmt.Errorf("序列化异常,data:%+v,err:%+v", result, err)
+		return "", fmt.Errorf("合并数据时序列化异常,data:%+v,err:%+v", result, err)
 	}
 	return string(data), nil
+}
+
+// 合并并行task数据
+func (s *JobInfo) ReduceParallel(plugin string, sharding int32) (string, error) {
+	taskList := s.FilterFinishParallelTask(plugin, sharding)
+	return s.reduce(taskList)
 }
 
 type concurrentTask struct {

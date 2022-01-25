@@ -13,6 +13,8 @@ type Task struct {
 	Name string
 	// 当前任务处理插件
 	Plugin string
+	// 子插件，如果不为空则说明当前任务是并行任务
+	SubPlugin string
 	// task状态,0:待执行，1：执行中，2：执行完成，3：异常退出
 	Status int32
 	// 输入参数

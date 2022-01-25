@@ -34,3 +34,6 @@ const (
 )
 
 type NotifyStatus int32
+
+// 并行任务分割符
+const ParallelTaskSeparator = "|"

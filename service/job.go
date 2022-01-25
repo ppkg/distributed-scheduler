@@ -13,6 +13,7 @@ import (
 	"github.com/ppkg/distributed-scheduler/proto/job"
 	"github.com/ppkg/distributed-scheduler/repository"
 	"github.com/ppkg/distributed-scheduler/repository/impl"
+	"github.com/ppkg/distributed-scheduler/util"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/ppkg/glog"
@@ -161,12 +162,22 @@ func (s *jobService) receiveSyncJobStream(stream job.JobService_SyncSubmitServer
 			})
 			firstPlugin = r.PluginSet[0]
 		}
-		jobInfo.TaskList.Append(&model.Task{
-			Sharding: sharding,
-			Name:     fmt.Sprintf("%s-%d", jobInfo.Job.Name, sharding),
-			Input:    r.Data,
-			Plugin:   firstPlugin,
-		})
+
+		var subPlugins []string
+		if util.IsParallelTask(firstPlugin) {
+			subPlugins = util.SplitParallelPlugin(firstPlugin)
+		} else {
+			subPlugins = append(subPlugins, "")
+		}
+		for _, item := range subPlugins {
+			jobInfo.TaskList.Append(&model.Task{
+				Sharding:  sharding,
+				Name:      fmt.Sprintf("%s-%d", jobInfo.Job.Name, sharding),
+				Input:     r.Data,
+				Plugin:    firstPlugin,
+				SubPlugin: item,
+			})
+		}
 		sharding++
 	}
 
@@ -207,12 +218,24 @@ func (s *jobService) receiveAsyncJobStream(stream job.JobService_AsyncSubmitServ
 			}
 			firstPlugin = r.PluginSet[0]
 		}
-		jobInfo.TaskList.Append(&model.Task{
-			Sharding: sharding,
-			Name:     fmt.Sprintf("%s-%d", jobInfo.Job.Name, sharding),
-			Input:    r.Data,
-			Plugin:   firstPlugin,
-		})
+
+		var subPlugins []string
+		if util.IsParallelTask(firstPlugin) {
+			subPlugins = util.SplitParallelPlugin(firstPlugin)
+		} else {
+			subPlugins = append(subPlugins, "")
+		}
+
+		for _, item := range subPlugins {
+			jobInfo.TaskList.Append(&model.Task{
+				Sharding:  sharding,
+				Name:      fmt.Sprintf("%s-%d", jobInfo.Job.Name, sharding),
+				Input:     r.Data,
+				Plugin:    firstPlugin,
+				SubPlugin: item,
+			})
+		}
+
 		sharding++
 	}
 

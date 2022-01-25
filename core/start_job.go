@@ -190,12 +190,12 @@ func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.Job
 			continue
 		}
 		// 如果下一个插件找不到相同的分片则下一个task没有创建需要创建新的
-		newTask := s.createNewTask(ctx, job, item, pluginSet[pos+1])
-		if newTask == nil {
+		newTasks := s.createNewTasks(ctx, job, item, pluginSet[pos+1])
+		if newTasks == nil {
 			continue
 		}
-		result = append(result, newTask)
-		job.TaskList.Append(newTask)
+		result = append(result, newTasks...)
+		job.TaskList.Append(newTasks...)
 	}
 	return result
 }
@@ -203,6 +203,23 @@ func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.Job
 // 任务执行完回调通知
 func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo, task *model.Task) func(err error) {
 	return func(err error) {
+		defer func() {
+			// 保存任务状态
+			task.FinishTime = time.Now()
+			err = s.taskRepo.UpdateStatus(s.Db, task)
+			if err != nil {
+				errMsg := fmt.Sprintf("持久化task(%d,%s)状态失败,err:%+v", task.Id, task.Name, err)
+				task.Status = int32(enum.ExceptionTaskStatus)
+				task.Message = errMsg
+				glog.Errorf("ApplicationContext/taskCallback %s", errMsg)
+
+				if s.isNeedCancelJob(job, task) {
+					job.Job.Status = int32(enum.SystemExceptionJobStatus)
+					util.CancelNotify(ctx, job, errMsg)
+				}
+			}
+		}()
+
 		if err != nil {
 			// 推送失败
 			errMsg := fmt.Sprintf("推送task(%d,%s)失败,err:%+v", task.Id, task.Name, err)
@@ -216,28 +233,11 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 			}
 		}
 
-		// 保存任务状态
-		task.FinishTime = time.Now()
-		err = s.taskRepo.UpdateStatus(s.Db, task)
-		if err != nil {
-			errMsg := fmt.Sprintf("持久化task(%d,%s)状态失败,%+v", task.Id, task.Name, err)
-			task.Status = int32(enum.ExceptionTaskStatus)
-			task.Message = errMsg
-			glog.Errorf("ApplicationContext/taskCallback %s", errMsg)
-
-			if s.isNeedCancelJob(job, task) {
-				job.Job.Status = int32(enum.SystemExceptionJobStatus)
-				util.CancelNotify(ctx, job, errMsg)
-			}
-			return
-		}
-
 		// 判断任务是否执行异常，异常则通知其他task停止执行
 		if enum.TaskStatus(task.Status) != enum.FinishTaskStatus {
 			errMsg := fmt.Sprintf("task(%d,%s)业务处理失败,%s", task.Id, task.Name, task.Message)
-			if task.Message == "" {
-				task.Message = "业务处理失败"
-			}
+			task.Status = int32(enum.ExceptionTaskStatus)
+			task.Message = errMsg
 			glog.Errorf("ApplicationContext/taskCallback %s", errMsg)
 
 			if s.isNeedCancelJob(job, task) {
@@ -253,29 +253,35 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 			return
 		}
 
+		// 判断当前任务是否为并行任务，如果是则需要继续判断其他并行任务是否已完成，否则直接跳过
+		if util.IsParallelTask(task.Plugin) && !job.IsFinishParallelTask(task.Plugin, task.Sharding) {
+			return
+		}
+
 		// 判断是否继续创建下一个
 		pos := util.FindHandlerPos(job.Job.PluginSet, task.Plugin)
 		if pos == -1 {
 			glog.Errorf("ApplicationContext/taskCallback job找不到plugin(%s),id:%d", task.Plugin, task.Id)
-			util.CancelNotify(ctx, job, fmt.Sprintf("job(%d,%s)不支持plugin(%s)", job.Job.Id, job.Job.Name, task.Plugin))
+			util.CancelNotify(ctx, job, fmt.Sprintf("job(%d,%s)系统不支持plugin(%s)", job.Job.Id, job.Job.Name, task.Plugin))
 			job.Job.Status = int32(enum.SystemExceptionJobStatus)
 			return
 		}
 
 		// 如果最后一个插件处理完毕就直接返回
-		if pos == len(strings.Split(job.Job.PluginSet, ","))-1 {
+		pluginSet := strings.Split(job.Job.PluginSet, ",")
+		if pos == len(pluginSet)-1 {
 			job.DoneLatch.Done()
 			return
 		}
 
 		// 创建新task并放入调度器执行
-		newTask := s.createNewTask(ctx, job, task, strings.Split(job.Job.PluginSet, ",")[pos+1])
-		if newTask == nil {
+		newTasks := s.createNewTasks(ctx, job, task, strings.Split(job.Job.PluginSet, ",")[pos+1])
+		if newTasks == nil {
 			return
 		}
-		job.TaskList.Append(newTask)
+		job.TaskList.Append(newTasks...)
 		// 调度新的task
-		s.Scheduler.DispatchTask(job, s.buildTasks(ctx, job, []*model.Task{newTask})...)
+		s.Scheduler.DispatchTask(job, s.buildTasks(ctx, job, newTasks)...)
 	}
 }
 
@@ -284,30 +290,84 @@ func (s *ApplicationContext) isNeedCancelJob(job *dto.JobInfo, task *model.Task)
 	if enum.TaskExceptionOperation(job.Job.TaskExceptionOperation) == enum.ExitTaskExceptionOperation {
 		return true
 	}
+	// 如果存在异常记录则跳过，不用再次添加
+	for _, item := range job.ExceptionTask.GetAll() {
+		if item == task {
+			return false
+		}
+	}
 	job.ExceptionTask.Append(task)
 	job.DoneLatch.Done()
 	return false
 }
 
 // 创建新task
-func (s *ApplicationContext) createNewTask(ctx context.Context, job *dto.JobInfo, task *model.Task, plugin string) *model.Task {
+func (s *ApplicationContext) createNewTasks(ctx context.Context, job *dto.JobInfo, task *model.Task, plugin string) []*model.Task {
+	var err error
+	var subPlugins []string
+	input := task.Output
+	if util.IsParallelTask(plugin) {
+		subPlugins = util.SplitParallelPlugin(plugin)
+		input, err = job.ReduceParallel(task.Plugin, task.Sharding)
+		if err != nil {
+			errMsg := fmt.Sprintf("合并并行task结果异常,当前task:%s,err:%+v", kit.JsonEncode(task), err)
+			task.Status = int32(enum.ExceptionTaskStatus)
+			task.Message = errMsg
+			glog.Errorf("ApplicationContext/createNewTask %s", errMsg)
+
+			if s.isNeedCancelJob(job, task) {
+				util.CancelNotify(ctx, job, errMsg)
+				job.Job.Status = int32(enum.SystemExceptionJobStatus)
+			}
+			return nil
+		}
+	} else {
+		subPlugins = append(subPlugins, "")
+	}
 	// 创建新task并放入调度器执行
-	newTask := &model.Task{
-		JobId:    task.JobId,
-		Sharding: task.Sharding,
-		Name:     task.Name,
-		Input:    task.Output,
-		Plugin:   plugin,
+	list := make([]*model.Task, 0, len(subPlugins))
+	for _, item := range subPlugins {
+		list = append(list, &model.Task{
+			JobId:     task.JobId,
+			Sharding:  task.Sharding,
+			Name:      task.Name,
+			Input:     input,
+			Plugin:    plugin,
+			SubPlugin: item,
+		})
 	}
 	// 持久化新task任务
-	err := s.taskRepo.Save(s.Db, newTask)
+	err = s.taskRepo.BatchSave(s.Db, list)
 	if err != nil {
-		glog.Errorf("ApplicationContext/createNewTask 持久化新task失败,task:%s,err:%+v", kit.JsonEncode(newTask), err)
-		util.CancelNotify(ctx, job, fmt.Sprintf("新task(%s)持久化失败,jobId:%d,%+v", task.Name, newTask.JobId, err))
-		job.Job.Status = int32(enum.SystemExceptionJobStatus)
+		errMsg := fmt.Sprintf("持久化新产生task异常,plugin:%s,新task:%s,%+v", plugin, kit.JsonEncode(list), err)
+		task.Status = int32(enum.ExceptionTaskStatus)
+		task.Message = errMsg
+		glog.Errorf("ApplicationContext/createNewTask %s", errMsg)
+
+		if s.isNeedCancelJob(job, task) {
+			util.CancelNotify(ctx, job, errMsg)
+			job.Job.Status = int32(enum.SystemExceptionJobStatus)
+		}
 		return nil
 	}
-	return newTask
+	list, err = s.taskRepo.List(s.Db, map[string]interface{}{
+		"jobId":    job.Job.Id,
+		"sharding": task.Sharding,
+		"plugin":   plugin,
+	})
+	if err != nil {
+		errMsg := fmt.Sprintf("查询刚刚创建新task异常,plugin:%s,jobId:%d,err:%+v", plugin, job.Job.Id, err)
+		task.Status = int32(enum.ExceptionTaskStatus)
+		task.Message = errMsg
+		glog.Errorf("ApplicationContext/createNewTask %s", errMsg)
+
+		if s.isNeedCancelJob(job, task) {
+			util.CancelNotify(ctx, job, errMsg)
+			job.Job.Status = int32(enum.SystemExceptionJobStatus)
+		}
+		return nil
+	}
+	return list
 }
 
 // 重启未完成的异步job
@@ -315,6 +375,11 @@ func (s *ApplicationContext) restartUndoneAsyncJob() {
 	list, err := s.loadUndoneAsyncJob()
 	if err != nil {
 		glog.Errorf("ApplicationContext/restartUndoneAsyncJob 加载未完成异步job异常,err:%+v", err)
+		return
+	}
+
+	// 此刻当前节点不是leader身份则直接跳过
+	if !s.IsLeaderNode() {
 		return
 	}
 
