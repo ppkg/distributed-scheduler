@@ -8,6 +8,7 @@ import (
 
 	"github.com/ppkg/distributed-scheduler/enum"
 	"github.com/ppkg/distributed-scheduler/model"
+	"github.com/ppkg/glog"
 )
 
 type JobInfo struct {
@@ -38,12 +39,40 @@ func (s *JobInfo) FilterFinishEndTask() []*model.Task {
 	pluginList := strings.Split(s.Job.PluginSet, ",")
 	targetPlugin := pluginList[len(pluginList)-1]
 	var taskList []*model.Task
+	parallelTaskMap := make(map[string]struct{})
 	for _, item := range s.TaskList.GetAll() {
 		if enum.TaskStatus(item.Status) == enum.FinishTaskStatus && item.Plugin == targetPlugin {
 			// 如果是并发task而且所有并发task未完成状态则跳过
-			if IsParallelTask(targetPlugin) && !s.IsFinishParallelTask(item.Plugin, item.Sharding) {
+			if IsParallelTask(targetPlugin) {
+				key := fmt.Sprintf("%s_%d", item.Plugin, item.Sharding)
+				if _, ok := parallelTaskMap[key]; ok {
+					continue
+				}
+				result, err := s.ReduceParallel(item.Plugin, item.Sharding)
+				if err != nil {
+					glog.Errorf("JobInfo/FilterFinishEndTask 合并并行task结果异常,plugin:%s,sharding:%d,err:%+v", item.Plugin, item.Sharding, err)
+					continue
+				}
+				parallelTaskMap[key] = struct{}{}
+				taskList = append(taskList, &model.Task{
+					Id:         item.Id,
+					JobId:      item.JobId,
+					Sharding:   item.Sharding,
+					Name:       item.Name,
+					Plugin:     item.Plugin,
+					SubPlugin:  "",
+					Status:     item.Status,
+					Input:      item.Input,
+					Output:     result,
+					Message:    "",
+					NodeId:     item.NodeId,
+					CreateTime: item.CreateTime,
+					UpdateTime: item.UpdateTime,
+					FinishTime: item.FinishTime,
+				})
 				continue
 			}
+			// 普通task直接append
 			taskList = append(taskList, item)
 		}
 	}
