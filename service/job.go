@@ -13,7 +13,6 @@ import (
 	"github.com/ppkg/distributed-scheduler/proto/job"
 	"github.com/ppkg/distributed-scheduler/repository"
 	"github.com/ppkg/distributed-scheduler/repository/impl"
-	"github.com/ppkg/distributed-scheduler/util"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/ppkg/glog"
@@ -164,8 +163,8 @@ func (s *jobService) receiveSyncJobStream(stream job.JobService_SyncSubmitServer
 		}
 
 		var subPlugins []string
-		if util.IsParallelTask(firstPlugin) {
-			subPlugins = util.SplitParallelPlugin(firstPlugin)
+		if dto.IsParallelTask(firstPlugin) {
+			subPlugins = dto.SplitParallelPlugin(firstPlugin)
 		} else {
 			subPlugins = append(subPlugins, "")
 		}
@@ -220,8 +219,8 @@ func (s *jobService) receiveAsyncJobStream(stream job.JobService_AsyncSubmitServ
 		}
 
 		var subPlugins []string
-		if util.IsParallelTask(firstPlugin) {
-			subPlugins = util.SplitParallelPlugin(firstPlugin)
+		if dto.IsParallelTask(firstPlugin) {
+			subPlugins = dto.SplitParallelPlugin(firstPlugin)
 		} else {
 			subPlugins = append(subPlugins, "")
 		}

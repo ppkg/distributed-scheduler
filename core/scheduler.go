@@ -176,7 +176,7 @@ func (s *scheduleEngine) IsEmptyWorker() bool {
 func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error {
 	tryCount := 3
 	plugin := task.Plugin
-	if util.IsParallelTask(plugin) {
+	if dto.IsParallelTask(plugin) {
 		plugin = task.SubPlugin
 	}
 	// 优先给自己worker执行,不过要先判断自己是否支持当前插件运行
@@ -408,7 +408,7 @@ func (s *scheduleEngine) buildLimitRateTaskFunc(job *dto.JobInfo, task InputTask
 func (s *scheduleEngine) processLimitRateTask(task *model.Task) error {
 	tryCount := 4
 	plugin := task.Plugin
-	if util.IsParallelTask(plugin) {
+	if dto.IsParallelTask(plugin) {
 		plugin = task.SubPlugin
 	}
 	workers, err := s.predicateWorker(plugin)

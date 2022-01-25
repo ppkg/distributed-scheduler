@@ -38,7 +38,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 		errMsg := fmt.Sprintf("job(%d,%s)处理超时终止运行,task数量:%d", jobInfo.Job.Id, jobInfo.Job.Name, jobInfo.Job.Size)
 		util.CancelNotify(ctx, jobInfo, errMsg)
 		jobInfo.Job.Status = int32(enum.RunningTimeoutJobStatus)
-		glog.Error(errMsg)
+		glog.Errorf("ApplicationContext/StartJob %s", errMsg)
 	})
 	defer timeout.Stop()
 
@@ -61,7 +61,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	if s.Scheduler.IsEmptyWorker() {
 		jobInfo.Job.Status = int32(enum.SystemExceptionJobStatus)
 		jobInfo.Job.Message = fmt.Sprintf("系统没有worker节点提供给job(%d,%s)调度执行", jobInfo.Job.Id, jobInfo.Job.Name)
-		glog.Error(jobInfo.Job.Message)
+		glog.Errorf("ApplicationContext/StartJob %s",jobInfo.Job.Message)
 		err = s.jobRepo.UpdateStatus(s.Db, jobInfo.Job)
 		if err != nil {
 			glog.Errorf("ApplicationContext/StartJob 更新job状态异常,id:%d,err:%+v", jobInfo.Job.Id, err)
@@ -254,7 +254,7 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 		}
 
 		// 判断当前任务是否为并行任务，如果是则需要继续判断其他并行任务是否已完成，否则直接跳过
-		if util.IsParallelTask(task.Plugin) && !job.IsFinishParallelTask(task.Plugin, task.Sharding) {
+		if dto.IsParallelTask(task.Plugin) && !job.IsFinishParallelTask(task.Plugin, task.Sharding) {
 			return
 		}
 
@@ -306,8 +306,8 @@ func (s *ApplicationContext) createNewTasks(ctx context.Context, job *dto.JobInf
 	var err error
 	var subPlugins []string
 	input := task.Output
-	if util.IsParallelTask(plugin) {
-		subPlugins = util.SplitParallelPlugin(plugin)
+	if dto.IsParallelTask(plugin) {
+		subPlugins = dto.SplitParallelPlugin(plugin)
 		input, err = job.ReduceParallel(task.Plugin, task.Sharding)
 		if err != nil {
 			errMsg := fmt.Sprintf("合并并行task结果异常,当前task:%s,err:%+v", kit.JsonEncode(task), err)

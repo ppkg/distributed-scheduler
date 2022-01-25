@@ -37,10 +37,13 @@ func (s *JobInfo) InitDoneChannel() {
 func (s *JobInfo) FilterFinishEndTask() []*model.Task {
 	pluginList := strings.Split(s.Job.PluginSet, ",")
 	targetPlugin := pluginList[len(pluginList)-1]
-	sharding := int32(len(pluginList) - 1)
 	var taskList []*model.Task
 	for _, item := range s.TaskList.GetAll() {
-		if enum.TaskStatus(item.Status) == enum.FinishTaskStatus && item.Plugin == targetPlugin && item.Sharding == sharding {
+		if enum.TaskStatus(item.Status) == enum.FinishTaskStatus && item.Plugin == targetPlugin {
+			// 如果是并发task而且所有并发task未完成状态则跳过
+			if IsParallelTask(targetPlugin) && !s.IsFinishParallelTask(item.Plugin, item.Sharding) {
+				continue
+			}
 			taskList = append(taskList, item)
 		}
 	}
@@ -61,8 +64,7 @@ func (s *JobInfo) FilterFinishParallelTask(plugin string, sharding int32) []*mod
 // 判断并行task是否都完成了
 func (s *JobInfo) IsFinishParallelTask(plugin string, sharding int32) bool {
 	list := s.FilterFinishParallelTask(plugin, sharding)
-	subPlugins := strings.Split(plugin, enum.ParallelTaskSeparator)
-	return len(subPlugins) == len(list)
+	return len(SplitParallelPlugin(plugin)) == len(list)
 }
 
 // 合并数据
@@ -138,4 +140,14 @@ func NewConcurrentTask(list ...*model.Task) *concurrentTask {
 	return &concurrentTask{
 		data: list,
 	}
+}
+
+// 是否为并行任务
+func IsParallelTask(name string) bool {
+	return strings.Contains(name, "|")
+}
+
+// 拆分出并行处理的插件名称
+func SplitParallelPlugin(name string) []string {
+	return strings.Split(name, "|")
 }
