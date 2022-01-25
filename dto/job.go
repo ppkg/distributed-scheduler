@@ -16,14 +16,17 @@ type JobInfo struct {
 	Job       *model.Job
 	TaskList  *concurrentTask
 	// 已执行失败task
-	ExceptionTask *concurrentTask
+	ExceptionTask   *concurrentTask
+	lock            sync.Mutex
+	lockParallelMap map[string]struct{}
 }
 
 func NewJobInfo(job *model.Job) *JobInfo {
 	return &JobInfo{
-		Job:           job,
-		TaskList:      NewConcurrentTask(),
-		ExceptionTask: NewConcurrentTask(),
+		Job:             job,
+		TaskList:        NewConcurrentTask(),
+		ExceptionTask:   NewConcurrentTask(),
+		lockParallelMap: make(map[string]struct{}),
 	}
 }
 
@@ -32,6 +35,18 @@ func (s *JobInfo) InitDoneChannel() {
 	finishTask := s.FilterFinishEndTask()
 	cacheSize := int(s.Job.Size) - len(finishTask)
 	s.DoneLatch = NewCountDownLatch(cacheSize)
+}
+
+// 尝试并行任务锁
+func (s *JobInfo) TryLockParallelTask(task *model.Task) bool {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	key := fmt.Sprintf("%s_%d", task.Plugin, task.Sharding)
+	if _, ok := s.lockParallelMap[key]; ok {
+		return false
+	}
+	s.lockParallelMap[key] = struct{}{}
+	return true
 }
 
 // 过滤出已完成最后task

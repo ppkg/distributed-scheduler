@@ -254,8 +254,15 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 		}
 
 		// 判断当前任务是否为并行任务，如果是则需要继续判断其他并行任务是否已完成，否则直接跳过
-		if dto.IsParallelTask(task.Plugin) && !job.IsFinishParallelTask(task.Plugin, task.Sharding) {
-			return
+		if dto.IsParallelTask(task.Plugin) {
+			// 当其他并行任务没有完成则直接返回
+			if !job.IsFinishParallelTask(task.Plugin, task.Sharding) {
+				return
+			}
+			// 获取不到锁直接返回
+			if !job.TryLockParallelTask(task) {
+				return
+			}
 		}
 
 		// 判断是否继续创建下一个
