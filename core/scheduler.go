@@ -39,9 +39,10 @@ type scheduleEngine struct {
 	dispatchQueue chan func(worker WorkerNode)
 
 	// 插件限流功能
-	limitRateConf     map[string]int
+	limitRateConfMap  map[string]limitRateConf
 	limitRatePoolMap  map[string]*ants.Pool
 	limitRateQueueMap map[string]chan func()
+	limitRateIndexer  map[string]string
 }
 
 func NewScheduler(workerThread int) *scheduleEngine {
@@ -53,29 +54,49 @@ func NewScheduler(workerThread int) *scheduleEngine {
 		roundRobinMap:     make(map[string]*concurrentUint32),
 		workerConns:       NewWorkerConns(),
 		dispatchQueue:     make(chan func(worker WorkerNode), 100000000),
-		limitRateConf:     make(map[string]int),
+		limitRateConfMap:  make(map[string]limitRateConf),
 		limitRatePoolMap:  make(map[string]*ants.Pool),
 		limitRateQueueMap: make(map[string]chan func()),
+		limitRateIndexer:  make(map[string]string),
 	}
 	return engine
 }
 
-// 指定插件限流
-func (s *scheduleEngine) PluginLimitRate(pluginName string, size int) {
-	s.limitRateConf[pluginName] = size
+// 构建插件限流组
+func (s *scheduleEngine) BuildLimitRatePluginGroup(group string, size int, plugins ...string) *scheduleEngine {
+	s.limitRateConfMap[group] = limitRateConf{
+		Size:    size,
+		Plugins: plugins,
+	}
+
+	for _, plugin := range plugins {
+		s.limitRateIndexer[plugin] = group
+	}
+	return s
+}
+
+func (s *scheduleEngine) AddLimitRatePlugin(group string, plugin string) *scheduleEngine {
+	conf, ok := s.limitRateConfMap[group]
+	if !ok {
+		return s
+	}
+	conf.Plugins = append(conf.Plugins, plugin)
+	s.limitRateConfMap[group] = conf
+	s.limitRateIndexer[plugin] = group
+	return s
 }
 
 // 调度器初始化操作
 func (s *scheduleEngine) Init() error {
-	for name, size := range s.limitRateConf {
-		pool, err := ants.NewPool(size)
+	for group, conf := range s.limitRateConfMap {
+		pool, err := ants.NewPool(conf.Size)
 		if err != nil {
 			glog.Errorf("scheduleEngine/Init 初始化限流池异常,err:%+v", err)
 			return err
 		}
-		s.limitRatePoolMap[name] = pool
-		s.limitRateQueueMap[name] = make(chan func(), 10000000)
-		go s.startLimitRateWork(name)
+		s.limitRatePoolMap[group] = pool
+		s.limitRateQueueMap[group] = make(chan func(), 10000000)
+		go s.startLimitRateWork(group)
 	}
 	return nil
 }
@@ -378,7 +399,7 @@ func (s *scheduleEngine) DispatchTask(job *dto.JobInfo, tasks ...InputTask) {
 		if dto.IsParallelTask(plugin) {
 			plugin = item.Task.SubPlugin
 		}
-		limitQueue, ok := s.limitRateQueueMap[plugin]
+		limitQueue, ok := s.limitRateQueueMap[s.limitRateIndexer[plugin]]
 		if !ok {
 			s.dispatchQueue <- s.buildTaskFunc(job, item)
 			continue
@@ -588,4 +609,9 @@ func (s *workerPoolMap) Remove(worker WorkerNode) {
 	ch := s.closeChannels[worker.NodeId]
 	close(ch)
 	delete(s.closeChannels, worker.NodeId)
+}
+
+type limitRateConf struct {
+	Size    int
+	Plugins []string
 }

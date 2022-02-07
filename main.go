@@ -31,6 +31,8 @@ func main() {
 		job.RegisterJobServiceServer(server, service.NewJobService(ctx))
 	})
 
+	app.Scheduler.BuildLimitRatePluginGroup("meituan", 5).AddLimitRatePlugin("meituan", "multi")
+
 	err := app.Run()
 	if err != nil {
 		fmt.Println("start server but got err:", err)
