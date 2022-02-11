@@ -490,7 +490,7 @@ func (s *scheduleEngine) buildTaskFunc(job *dto.JobInfo, task InputTask) func(wo
 			}
 			// 推送job开始执行事件
 			if task.Task.Sharding == 0 && strings.HasPrefix(job.Job.PluginSet, plugin) {
-				go s.dispatchPostStart(job)
+				go s.doPostStart(worker, job)
 			}
 			task.Callback(s.processTask(worker, task.Task))
 		}
@@ -567,41 +567,38 @@ func (s *scheduleEngine) pushJobNotify(worker WorkerNode, j *dto.JobInfo) error 
 	return nil
 }
 
-// 分发job通知
-func (s *scheduleEngine) dispatchPostStart(job *dto.JobInfo) {
-	fn := func(worker WorkerNode) {
-		var err error
-		tryCount := 3
-		// 优先给自己worker执行,不过要先判断自己是否支持当前job通知类型
-		if util.IsSupportHandler(worker.JobNotifySet, job.Job.Type) {
-			err = s.pushPostStart(worker, job)
-			if err == nil {
-				return
-			}
-			glog.Errorf("ScheduleEngine/dispatchPostStart 优先给自己worker推送job开始执行事件异常,worker:%s,jobId:%d,err:%+v", kit.JsonEncode(worker), job.Job.Id, err)
-		} else {
-			tryCount = 4
-		}
-
-		// 自己worker执行失败则交给其他worker来执行
-		workers, err := s.predicateJobNotifyWorker(job.Job.Type)
-		if err != nil {
-			glog.Errorf("ScheduleEngine/dispatchPostStart 预选worker节点异常,jobId:%d,err:%+v", job.Job.Id, err)
+// 处理job开始执行通知
+func (s *scheduleEngine) doPostStart(worker WorkerNode, job *dto.JobInfo) {
+	var err error
+	tryCount := 3
+	// 优先给自己worker执行,不过要先判断自己是否支持当前job通知类型
+	if util.IsSupportHandler(worker.JobNotifySet, job.Job.Type) {
+		err = s.pushPostStart(worker, job)
+		if err == nil {
 			return
 		}
-
-		// 推送任务,如果推送失败则重推
-		for i := 0; i < tryCount; i++ {
-			myWorker := s.preferWorker(job.Job.Type, workers)
-			err = s.pushPostStart(myWorker, job)
-			if err == nil {
-				return
-			}
-			err = fmt.Errorf("重试推送3次job开始执行事件异常,最后一次推送worker(%s),err:%+v", myWorker.NodeId, err)
-			glog.Errorf("ScheduleEngine/dispatchPostStart 第%d次推送job开始执行事件异常,worker:%s,jobId:%d,err:%+v", i+1, kit.JsonEncode(myWorker), job.Job.Id, err)
-		}
+		glog.Errorf("ScheduleEngine/dispatchPostStart 优先给自己worker推送job开始执行事件异常,worker:%s,jobId:%d,err:%+v", kit.JsonEncode(worker), job.Job.Id, err)
+	} else {
+		tryCount = 4
 	}
-	s.dispatchQueue <- fn
+
+	// 自己worker执行失败则交给其他worker来执行
+	workers, err := s.predicateJobNotifyWorker(job.Job.Type)
+	if err != nil {
+		glog.Errorf("ScheduleEngine/dispatchPostStart 预选worker节点异常,jobId:%d,err:%+v", job.Job.Id, err)
+		return
+	}
+
+	// 推送任务,如果推送失败则重推
+	for i := 0; i < tryCount; i++ {
+		myWorker := s.preferWorker(job.Job.Type, workers)
+		err = s.pushPostStart(myWorker, job)
+		if err == nil {
+			return
+		}
+		err = fmt.Errorf("重试推送3次job开始执行事件异常,最后一次推送worker(%s),err:%+v", myWorker.NodeId, err)
+		glog.Errorf("ScheduleEngine/dispatchPostStart 第%d次推送job开始执行事件异常,worker:%s,jobId:%d,err:%+v", i+1, kit.JsonEncode(myWorker), job.Job.Id, err)
+	}
 }
 
 // 推送job开始执行事件
