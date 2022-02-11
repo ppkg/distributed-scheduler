@@ -1,7 +1,0 @@
-[Grpc]
-Appid="distributed-schedule"
-Address="8.129.51.26:10000"
-
-[LogService]
-Appid="distributed-schedule"
-Address="10.1.1.248:10001"
