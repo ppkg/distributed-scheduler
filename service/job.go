@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -96,12 +97,16 @@ func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 		return err
 	}
 
-	return stream.SendAndClose(&job.SyncSubmitResponse{
+	resp := &job.SyncSubmitResponse{
 		Id:     jobInfo.Job.Id,
 		Status: jobInfo.Job.Status,
 		Result: jobInfo.Job.Result,
 		Mesage: jobInfo.Job.Message,
-	})
+	}
+	if jobInfo.Job.Meta != "" {
+		_ = json.Unmarshal([]byte(jobInfo.Job.Meta), &resp.Meta)
+	}
+	return stream.SendAndClose(resp)
 }
 
 // 重新加载job信息

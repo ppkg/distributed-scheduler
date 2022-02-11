@@ -24,7 +24,7 @@ message AsyncSubmitRequest {
   // job类型,回调通知时根据job类型执行不同的操作
   string Type = 2;
   // meta信息
-  map<string,string> Meta = 3;
+  map<string, string> Meta = 3;
   // 插件集合
   repeated string PluginSet = 4;
   // job数据
@@ -51,7 +51,7 @@ message AsyncNotifyRequest {
   // job类型,异步回调通知时使用，根据不同值执行对应业务
   string Type = 3;
   // meta信息
-  map<string,string> Meta = 4;
+  map<string, string> Meta = 4;
   // job状态,2：执行完成，3：取消执行，4：系统异常，5：task推送失败，6：运行超时，7：业务处理异常，8：回调通知异常
   int32 Status = 5;
   // 结果输出
@@ -67,14 +67,14 @@ message AsyncPostStartRequest {
   // job类型,异步回调通知时使用，根据不同值执行对应业务
   string Type = 3;
   // meta信息
-  map<string,string> Meta = 4;
+  map<string, string> Meta = 4;
 }
 
 message SyncSubmitRequest {
   // job名称
   string Name = 1;
   // meta信息
-  map<string,string> Meta = 2;
+  map<string, string> Meta = 2;
   // 插件集合
   repeated string PluginSet = 3;
   // job数据
@@ -90,10 +90,12 @@ message SyncSubmitRequest {
 message SyncSubmitResponse {
   // job ID
   int64 Id = 1;
+  // meta信息
+  map<string, string> Meta = 2;
   // job状态,0:待执行，1：执行中，2：执行完成，3：取消执行，4：系统异常，5：推送失败，6：运行超时，7：业务处理异常
-  int32 Status = 2;
+  int32 Status = 3;
   // 处理结果
-  string Result = 3;
+  string Result = 4;
   // 异常信息
-  string Mesage = 4;
+  string Mesage = 5;
 }
