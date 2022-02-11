@@ -34,3 +34,13 @@ const (
 )
 
 type NotifyStatus int32
+
+// job取消状态，200:取消成功,201:job已执行完成,404:job不存在,500:取消失败
+type CancelStatus int32
+
+const (
+	SuccessCancelStatus   CancelStatus = 200
+	FinishJobCancelStatus CancelStatus = 201
+	NotFoundCancelStatus  CancelStatus = 404
+	FailCancelStatus      CancelStatus = 500
+)

@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/ppkg/distributed-scheduler/core"
 	"github.com/ppkg/distributed-scheduler/dto"
+	"github.com/ppkg/distributed-scheduler/enum"
 	"github.com/ppkg/distributed-scheduler/errCode"
 	"github.com/ppkg/distributed-scheduler/model"
 	"github.com/ppkg/distributed-scheduler/proto/job"
@@ -25,6 +27,16 @@ type jobService struct {
 	appCtx   *core.ApplicationContext
 	jobRepo  repository.JobRepository
 	taskRepo repository.TaskRepository
+}
+
+// 异步结果通知
+func (s *jobService) AsyncNotify(_ context.Context, _ *job.AsyncNotifyRequest) (*empty.Empty, error) {
+	return nil, errors.New("not implemented")
+}
+
+// job开始执行通知
+func (s *jobService) AsyncPostStart(_ context.Context, _ *job.AsyncPostStartRequest) (*empty.Empty, error) {
+	return nil, errors.New("not implemented")
 }
 
 // 异步提交job
@@ -57,16 +69,6 @@ func (s *jobService) AsyncSubmit(stream job.JobService_AsyncSubmitServer) error 
 			Id: jobInfo.Job.Id,
 		},
 	)
-}
-
-// 异步结果通知
-func (s *jobService) AsyncNotify(ctx context.Context, req *job.AsyncNotifyRequest) (*empty.Empty, error) {
-	panic("not implemented")
-}
-
-// job开始执行通知
-func (s *jobService) AsyncPostStart(ctx context.Context, req *job.AsyncPostStartRequest) (*empty.Empty, error) {
-	panic("not implemented")
 }
 
 // 同步提交job
@@ -255,6 +257,44 @@ func (s *jobService) receiveAsyncJobStream(stream job.JobService_AsyncSubmitServ
 		sharding++
 	}
 	return jobInfo, nil
+}
+
+// 手动取消job
+func (s *jobService) ManualCancel(ctx context.Context, req *job.ManualCancelRequest) (*job.ManualCancelResponse, error) {
+	if req.Id == 0 {
+		return nil, errors.New("参数ID不能为空")
+	}
+	resp := &job.ManualCancelResponse{
+		Status: int32(enum.SuccessCancelStatus),
+	}
+	job, err := s.jobRepo.FindById(s.appCtx.Db, req.Id)
+	if err != nil {
+		msg := fmt.Sprintf("查询job详情异常,err:%+v", err)
+		glog.Errorf("jobService/ManualCancel %s", msg)
+		resp.Status = int32(enum.FailCancelStatus)
+		resp.Message = msg
+		return resp, nil
+	}
+	// 处理job不存在情况
+	if job == nil {
+		resp.Status = int32(enum.NotFoundCancelStatus)
+		return resp, nil
+	}
+	// 处理job已完成情况
+	if job.Status == int32(enum.FinishJobStatus) {
+		resp.Status = int32(enum.FinishJobCancelStatus)
+		return resp, nil
+	}
+	var reason []string
+	if req.Reason != "" {
+		reason = append(reason, req.Reason)
+	}
+	err = s.appCtx.ManualCancelJob(req.Id, reason...)
+	if err != nil {
+		resp.Status = int32(enum.FailCancelStatus)
+		resp.Message = err.Error()
+	}
+	return resp, nil
 }
 
 func NewJobService(ctx *core.ApplicationContext) job.JobServiceServer {

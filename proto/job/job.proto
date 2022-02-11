@@ -16,6 +16,8 @@ service JobService {
   rpc AsyncPostStart(AsyncPostStartRequest) returns (google.protobuf.Empty);
   // 同步提交job(当调度器挂掉会导致job处理中断，谨用)
   rpc SyncSubmit(stream SyncSubmitRequest) returns (SyncSubmitResponse);
+  // 手动取消job
+  rpc ManualCancel(ManualCancelRequest) returns (ManualCancelResponse);
 }
 
 message AsyncSubmitRequest {
@@ -98,4 +100,17 @@ message SyncSubmitResponse {
   string Result = 4;
   // 异常信息
   string Mesage = 5;
+}
+
+message ManualCancelRequest {
+  // job id
+  int64 Id = 1;
+  // 取消原因
+  string Reason = 2;
+}
+message ManualCancelResponse {
+  // job取消状态，200:取消成功,201:job已执行完成,404:job不存在,500:取消失败
+  int32 status = 1;
+  // 取消失败信息
+  string message = 2;
 }

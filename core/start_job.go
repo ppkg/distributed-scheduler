@@ -454,3 +454,23 @@ func (s *ApplicationContext) loadUndoneAsyncJob() ([]*dto.JobInfo, error) {
 	}
 	return list, nil
 }
+
+// 手动取消job
+func (s *ApplicationContext) ManualCancelJob(jobId int64, reason ...string) error {
+	jobObj, ok := s.jobContainer.Get(jobId)
+	if !ok {
+		return nil
+	}
+	s.jobContainer.Remove(jobId)
+	cancelReason := "手动取消job"
+	if len(reason) > 0 {
+		cancelReason += "：" + reason[0]
+	}
+	util.CancelNotify(jobObj.Ctx, jobObj.Job, cancelReason)
+	jobObj.Job.Job.Status = int32(enum.ManualCancelState)
+	err := s.jobRepo.UpdateStatus(s.Db, jobObj.Job.Job)
+	if err != nil {
+		glog.Errorf("ApplicationContext/ManualCancelJob 更新job状态异常,id:%d,err:%+v", jobObj.Job.Job.Id, err)
+	}
+	return nil
+}
