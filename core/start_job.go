@@ -467,7 +467,7 @@ func (s *ApplicationContext) ManualCancelJob(jobId int64, reason ...string) erro
 		cancelReason += "：" + reason[0]
 	}
 	util.CancelNotify(jobObj.Ctx, jobObj.Job, cancelReason)
-	jobObj.Job.Job.Status = int32(enum.ManualCancelState)
+	jobObj.Job.Job.Status = int32(enum.CancelJobStatus)
 	err := s.jobRepo.UpdateStatus(s.Db, jobObj.Job.Job)
 	if err != nil {
 		glog.Errorf("ApplicationContext/ManualCancelJob 更新job状态异常,id:%d,err:%+v", jobObj.Job.Job.Id, err)
