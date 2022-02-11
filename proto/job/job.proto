@@ -10,8 +10,10 @@ import "google/protobuf/empty.proto";
 service JobService {
   // 异步提交job
   rpc AsyncSubmit(stream AsyncSubmitRequest) returns (AsyncSubmitResponse);
-  // 异步通知
+  // 异步结果通知
   rpc AsyncNotify(AsyncNotifyRequest) returns (google.protobuf.Empty);
+  // job开始执行通知
+  rpc AsyncPostStart(AsyncPostStartRequest) returns (google.protobuf.Empty);
   // 同步提交job(当调度器挂掉会导致job处理中断，谨用)
   rpc SyncSubmit(stream SyncSubmitRequest) returns (SyncSubmitResponse);
 }
@@ -21,18 +23,20 @@ message AsyncSubmitRequest {
   string Name = 1;
   // job类型,回调通知时根据job类型执行不同的操作
   string Type = 2;
+  // meta信息
+  map<string,string> Meta = 3;
   // 插件集合
-  repeated string PluginSet = 3;
+  repeated string PluginSet = 4;
   // job数据
-  string Data = 4;
+  string Data = 5;
   // job完成是否需要通知worker
-  bool IsNotify = 5;
+  bool IsNotify = 6;
   // job标签，便于job快速搜索
-  string Label = 6;
+  string Label = 7;
   // 数据来源，提交job的应用名称
-  string Source = 7;
+  string Source = 8;
   // task异常操作，0：退出job执行，1：跳过当前task继续执行下一个
-  int32 TaskExceptionOperation = 8;
+  int32 TaskExceptionOperation = 9;
 }
 
 message AsyncSubmitResponse {
@@ -46,27 +50,41 @@ message AsyncNotifyRequest {
   string Name = 2;
   // job类型,异步回调通知时使用，根据不同值执行对应业务
   string Type = 3;
+  // meta信息
+  map<string,string> Meta = 4;
   // job状态,2：执行完成，3：取消执行，4：系统异常，5：task推送失败，6：运行超时，7：业务处理异常，8：回调通知异常
-  int32 Status = 4;
+  int32 Status = 5;
   // 结果输出
-  string Result = 5;
+  string Result = 6;
   // 异常信息
-  string Mesage = 6;
+  string Mesage = 7;
+}
+
+message AsyncPostStartRequest {
+  int64 Id = 1;
+  // job名称
+  string Name = 2;
+  // job类型,异步回调通知时使用，根据不同值执行对应业务
+  string Type = 3;
+  // meta信息
+  map<string,string> Meta = 4;
 }
 
 message SyncSubmitRequest {
   // job名称
   string Name = 1;
+  // meta信息
+  map<string,string> Meta = 2;
   // 插件集合
-  repeated string PluginSet = 2;
+  repeated string PluginSet = 3;
   // job数据
-  string Data = 3;
+  string Data = 4;
   // job标签，便于job快速搜索
-  string Label = 4;
+  string Label = 5;
   // 数据来源，提交job的应用名称
-  string Source = 5;
+  string Source = 6;
   // task异常操作，0：退出job执行，1：跳过当前task继续执行下一个
-  int32 TaskExceptionOperation = 6;
+  int32 TaskExceptionOperation = 7;
 }
 
 message SyncSubmitResponse {

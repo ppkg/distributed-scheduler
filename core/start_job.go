@@ -254,7 +254,7 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 		}
 
 		// 判断当前任务是否为并行任务，如果是则需要继续判断其他并行任务是否已完成，否则直接跳过
-		if dto.IsParallelTask(task.Plugin) {
+		if dto.IsParallelPlugin(task.Plugin) {
 			// 当其他并行任务没有完成则直接返回
 			if !job.IsFinishParallelTask(task.Plugin, task.Sharding) {
 				return
@@ -312,7 +312,7 @@ func (s *ApplicationContext) isNeedCancelJob(job *dto.JobInfo, task *model.Task)
 func (s *ApplicationContext) createNewTasks(ctx context.Context, job *dto.JobInfo, task *model.Task, plugin string) []*model.Task {
 	var err error
 	input := task.Output
-	if dto.IsParallelTask(task.Plugin) {
+	if dto.IsParallelPlugin(task.Plugin) {
 		input, err = job.ReduceParallel(task.Plugin, task.Sharding)
 		if err != nil {
 			errMsg := fmt.Sprintf("合并并行task结果异常,当前task:%s,err:%+v", kit.JsonEncode(task), err)
@@ -329,7 +329,7 @@ func (s *ApplicationContext) createNewTasks(ctx context.Context, job *dto.JobInf
 	}
 
 	subPlugins := []string{""}
-	if dto.IsParallelTask(plugin) {
+	if dto.IsParallelPlugin(plugin) {
 		subPlugins = dto.SplitParallelPlugin(plugin)
 	}
 	// 创建新task并放入调度器执行

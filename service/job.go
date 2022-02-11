@@ -13,6 +13,7 @@ import (
 	"github.com/ppkg/distributed-scheduler/proto/job"
 	"github.com/ppkg/distributed-scheduler/repository"
 	"github.com/ppkg/distributed-scheduler/repository/impl"
+	"github.com/ppkg/kit"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/ppkg/glog"
@@ -57,8 +58,13 @@ func (s *jobService) AsyncSubmit(stream job.JobService_AsyncSubmitServer) error 
 	)
 }
 
-// 异步通知
+// 异步结果通知
 func (s *jobService) AsyncNotify(ctx context.Context, req *job.AsyncNotifyRequest) (*empty.Empty, error) {
+	panic("not implemented")
+}
+
+// job开始执行通知
+func (s *jobService) AsyncPostStart(ctx context.Context, req *job.AsyncPostStartRequest) (*empty.Empty, error) {
 	panic("not implemented")
 }
 
@@ -159,11 +165,14 @@ func (s *jobService) receiveSyncJobStream(stream job.JobService_SyncSubmitServer
 				Source:                 r.Source,
 				TaskExceptionOperation: r.TaskExceptionOperation,
 			})
+			if len(r.Meta) > 0 {
+				jobInfo.Job.Meta = kit.JsonEncode(r.Meta)
+			}
 			firstPlugin = r.PluginSet[0]
 		}
 
 		var subPlugins []string
-		if dto.IsParallelTask(firstPlugin) {
+		if dto.IsParallelPlugin(firstPlugin) {
 			subPlugins = dto.SplitParallelPlugin(firstPlugin)
 		} else {
 			subPlugins = append(subPlugins, "")
@@ -214,11 +223,14 @@ func (s *jobService) receiveAsyncJobStream(stream job.JobService_AsyncSubmitServ
 			if r.IsNotify {
 				jobInfo.Job.IsNotify = 1
 			}
+			if len(r.Meta) > 0 {
+				jobInfo.Job.Meta = kit.JsonEncode(r.Meta)
+			}
 			firstPlugin = r.PluginSet[0]
 		}
 
 		var subPlugins []string
-		if dto.IsParallelTask(firstPlugin) {
+		if dto.IsParallelPlugin(firstPlugin) {
 			subPlugins = dto.SplitParallelPlugin(firstPlugin)
 		} else {
 			subPlugins = append(subPlugins, "")

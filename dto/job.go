@@ -58,7 +58,7 @@ func (s *JobInfo) FilterFinishEndTask() []*model.Task {
 	for _, item := range s.TaskList.GetAll() {
 		if enum.TaskStatus(item.Status) == enum.FinishTaskStatus && item.Plugin == targetPlugin {
 			// 如果是并发task而且所有并发task未完成状态则跳过
-			if IsParallelTask(targetPlugin) {
+			if IsParallelPlugin(targetPlugin) {
 				key := fmt.Sprintf("%s_%d", item.Plugin, item.Sharding)
 				if _, ok := parallelTaskMap[key]; ok {
 					continue
@@ -186,8 +186,8 @@ func NewConcurrentTask(list ...*model.Task) *concurrentTask {
 	}
 }
 
-// 是否为并行任务
-func IsParallelTask(name string) bool {
+// 是否为并行任务插件
+func IsParallelPlugin(name string) bool {
 	return strings.Contains(name, "|")
 }
 

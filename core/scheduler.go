@@ -2,7 +2,9 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/ppkg/distributed-scheduler/dto"
@@ -197,7 +199,7 @@ func (s *scheduleEngine) IsEmptyWorker() bool {
 func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error {
 	tryCount := 3
 	plugin := task.Plugin
-	if dto.IsParallelTask(plugin) {
+	if dto.IsParallelPlugin(plugin) {
 		plugin = task.SubPlugin
 	}
 	// 优先给自己worker执行,不过要先判断自己是否支持当前插件运行
@@ -262,7 +264,7 @@ func (s *scheduleEngine) pushTask(worker WorkerNode, t *model.Task) error {
 		Plugin: t.Plugin,
 		Data:   t.Input,
 	}
-	if dto.IsParallelTask(req.Plugin) {
+	if dto.IsParallelPlugin(req.Plugin) {
 		req.Plugin = t.SubPlugin
 	}
 	resp, err := client.SyncSubmit(context.Background(), req)
@@ -396,7 +398,7 @@ func (s *scheduleEngine) DispatchTask(job *dto.JobInfo, tasks ...InputTask) {
 	}
 	for _, item := range tasks {
 		plugin := item.Task.Plugin
-		if dto.IsParallelTask(plugin) {
+		if dto.IsParallelPlugin(plugin) {
 			plugin = item.Task.SubPlugin
 		}
 		limitQueue, ok := s.limitRateQueueMap[s.limitRateIndexer[plugin]]
@@ -437,7 +439,7 @@ func (s *scheduleEngine) buildLimitRateTaskFunc(job *dto.JobInfo, task InputTask
 func (s *scheduleEngine) processLimitRateTask(task *model.Task) error {
 	tryCount := 4
 	plugin := task.Plugin
-	if dto.IsParallelTask(plugin) {
+	if dto.IsParallelPlugin(plugin) {
 		plugin = task.SubPlugin
 	}
 	workers, err := s.predicateWorker(plugin)
@@ -482,6 +484,14 @@ func (s *scheduleEngine) buildTaskFunc(job *dto.JobInfo, task InputTask) func(wo
 			glog.Warningf("scheduleEngine/buildTaskFunc 退出当前任务(%d,%s)，其他任务执行失败:%s", task.Task.Id, task.Task.Name, cancelParam.Reason)
 			return
 		default:
+			plugin := task.Task.Plugin
+			if dto.IsParallelPlugin(plugin) {
+				plugin = task.Task.SubPlugin
+			}
+			// 推送job开始执行事件
+			if task.Task.Sharding == 0 && strings.HasPrefix(job.Job.PluginSet, plugin) {
+				go s.dispatchPostStart(job)
+			}
 			task.Callback(s.processTask(worker, task.Task))
 		}
 	}
@@ -538,14 +548,79 @@ func (s *scheduleEngine) pushJobNotify(worker WorkerNode, j *dto.JobInfo) error 
 	}
 
 	client := job.NewJobServiceClient(conn)
-	_, err = client.AsyncNotify(context.Background(), &job.AsyncNotifyRequest{
+	req := &job.AsyncNotifyRequest{
 		Id:     j.Job.Id,
 		Name:   j.Job.Name,
 		Type:   j.Job.Type,
 		Status: j.Job.Status,
 		Result: j.Job.Result,
 		Mesage: j.Job.Message,
-	})
+	}
+	if j.Job.Meta != "" {
+		_ = json.Unmarshal([]byte(j.Job.Meta), &req.Meta)
+	}
+	_, err = client.AsyncNotify(context.Background(), req)
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// 分发job通知
+func (s *scheduleEngine) dispatchPostStart(job *dto.JobInfo) {
+	fn := func(worker WorkerNode) {
+		var err error
+		tryCount := 3
+		// 优先给自己worker执行,不过要先判断自己是否支持当前job通知类型
+		if util.IsSupportHandler(worker.JobNotifySet, job.Job.Type) {
+			err = s.pushPostStart(worker, job)
+			if err == nil {
+				return
+			}
+			glog.Errorf("ScheduleEngine/dispatchPostStart 优先给自己worker推送job开始执行事件异常,worker:%s,jobId:%d,err:%+v", kit.JsonEncode(worker), job.Job.Id, err)
+		} else {
+			tryCount = 4
+		}
+
+		// 自己worker执行失败则交给其他worker来执行
+		workers, err := s.predicateJobNotifyWorker(job.Job.Type)
+		if err != nil {
+			glog.Errorf("ScheduleEngine/dispatchPostStart 预选worker节点异常,jobId:%d,err:%+v", job.Job.Id, err)
+			return
+		}
+
+		// 推送任务,如果推送失败则重推
+		for i := 0; i < tryCount; i++ {
+			myWorker := s.preferWorker(job.Job.Type, workers)
+			err = s.pushPostStart(myWorker, job)
+			if err == nil {
+				return
+			}
+			err = fmt.Errorf("重试推送3次job开始执行事件异常,最后一次推送worker(%s),err:%+v", myWorker.NodeId, err)
+			glog.Errorf("ScheduleEngine/dispatchPostStart 第%d次推送job开始执行事件异常,worker:%s,jobId:%d,err:%+v", i+1, kit.JsonEncode(myWorker), job.Job.Id, err)
+		}
+	}
+	s.dispatchQueue <- fn
+}
+
+// 推送job开始执行事件
+func (s *scheduleEngine) pushPostStart(worker WorkerNode, j *dto.JobInfo) error {
+	conn, err := s.workerConns.Get(worker)
+	if err != nil {
+		return err
+	}
+
+	client := job.NewJobServiceClient(conn)
+	req := &job.AsyncPostStartRequest{
+		Id:   j.Job.Id,
+		Name: j.Job.Name,
+		Type: j.Job.Type,
+	}
+	if j.Job.Meta != "" {
+		_ = json.Unmarshal([]byte(j.Job.Meta), &req.Meta)
+	}
+	_, err = client.AsyncPostStart(context.Background(), req)
 
 	if err != nil {
 		return err

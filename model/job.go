@@ -10,6 +10,8 @@ type Job struct {
 	Name string
 	// job类型
 	Type string
+	// meta信息
+	Meta string
 	// job标签，便于job快速搜索
 	Label string
 	// 数据来源，提交job的应用名称
