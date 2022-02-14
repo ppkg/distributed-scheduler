@@ -14,8 +14,8 @@ import (
 	"github.com/ppkg/distributed-scheduler/proto/task"
 	"github.com/ppkg/distributed-scheduler/util"
 
+	"github.com/maybgit/glog"
 	"github.com/panjf2000/ants/v2"
-	"github.com/ppkg/glog"
 	"github.com/ppkg/kit"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

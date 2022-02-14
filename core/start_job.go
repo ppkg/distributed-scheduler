@@ -13,7 +13,7 @@ import (
 	"github.com/ppkg/distributed-scheduler/model"
 	"github.com/ppkg/distributed-scheduler/util"
 
-	"github.com/ppkg/glog"
+	"github.com/maybgit/glog"
 	"github.com/ppkg/kit"
 )
 

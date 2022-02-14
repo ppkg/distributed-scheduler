@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/limitedlee/microservice/common/config"
-	"github.com/ppkg/glog"
+	"github.com/maybgit/glog"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )

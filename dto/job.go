@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/maybgit/glog"
 	"github.com/ppkg/distributed-scheduler/enum"
 	"github.com/ppkg/distributed-scheduler/model"
-	"github.com/ppkg/glog"
 )
 
 type JobInfo struct {

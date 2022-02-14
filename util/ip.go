@@ -3,7 +3,7 @@ package util
 import (
 	"net"
 
-	"github.com/ppkg/glog"
+	"github.com/maybgit/glog"
 )
 
 // 获取本机ip地址

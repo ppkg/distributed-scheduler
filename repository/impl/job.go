@@ -5,7 +5,7 @@ import (
 	"github.com/ppkg/distributed-scheduler/model"
 	"github.com/ppkg/distributed-scheduler/repository"
 
-	"github.com/ppkg/glog"
+	"github.com/maybgit/glog"
 	"github.com/ppkg/kit"
 	"gorm.io/gorm"
 )
