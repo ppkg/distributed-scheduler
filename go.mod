@@ -14,7 +14,7 @@ require (
 	github.com/maybgit/glog v0.1.22
 	github.com/nacos-group/nacos-sdk-go v1.0.9
 	github.com/panjf2000/ants/v2 v2.4.7
-	github.com/ppkg/kit v0.0.0-20210823101229-cd1ff728fbc4
+	github.com/ppkg/kit v0.0.0-20210928070906-2e2b70f489af
 	google.golang.org/grpc v1.43.0
 	gorm.io/driver/mysql v1.2.2
 	gorm.io/gorm v1.22.4
