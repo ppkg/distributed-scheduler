@@ -134,7 +134,7 @@ func (s *ApplicationContext) initDefaultConfig() {
 
 	s.conf.Raft.NodeId = os.Getenv("NODE_ID")
 	if s.conf.Raft.NodeId == "" {
-		s.conf.Raft.NodeId = os.Getenv("HOSTNAME")
+		s.conf.Raft.NodeId, _ = os.Hostname()
 	}
 	s.conf.Raft.DataDir = os.Getenv("RAFT_DATA_DIR")
 	if s.conf.Raft.DataDir == "" {
