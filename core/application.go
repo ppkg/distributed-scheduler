@@ -34,6 +34,7 @@ import (
 )
 
 type ApplicationContext struct {
+	isLeader   bool
 	conf       Config
 	raft       *raft.Raft
 	tm         *transport.Manager
@@ -69,6 +70,7 @@ func NewApp(opts ...Option) *ApplicationContext {
 // 当前节点选举为leader身份时需要加载未完成异步job
 func (s *ApplicationContext) watchRaftLeader() {
 	for isLeader := range s.raft.LeaderCh() {
+		s.isLeader = isLeader
 		if isLeader {
 			s.updateCurrentNacosRole(enum.LeaderRaftRole)
 			glog.Infof("ApplicationContext/watchRaftLeader 当前raft节点(%s,%s)获取leader身份", s.conf.Raft.NodeId, s.getPeerAddr())
@@ -585,8 +587,7 @@ func (s *ApplicationContext) watchSchedulerService() error {
 
 // 判断是否为主节点
 func (s *ApplicationContext) IsLeaderNode() bool {
-	future := s.raft.VerifyLeader()
-	return future.Error() == nil
+	return s.isLeader
 }
 
 // 获取主节点信息
