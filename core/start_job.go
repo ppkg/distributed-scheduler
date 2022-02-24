@@ -393,7 +393,7 @@ func (s *ApplicationContext) restartUndoneAsyncJob() {
 	}
 
 	// 此刻当前节点不是leader身份则直接跳过
-	if !s.IsLeaderNode() {
+	if !s.isLeader {
 		return
 	}
 

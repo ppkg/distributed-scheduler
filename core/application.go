@@ -34,10 +34,12 @@ import (
 )
 
 type ApplicationContext struct {
-	conf       Config
-	raft       *raft.Raft
-	tm         *transport.Manager
-	grpcServer *grpc.Server
+	isLeader             bool
+	schedulerServiceList []dto.NodeInfo
+	conf                 Config
+	raft                 *raft.Raft
+	tm                   *transport.Manager
+	grpcServer           *grpc.Server
 	// nacos服务发现客户端
 	namingClient namingClient.INamingClient
 	// nacos配置服务客户端
@@ -58,6 +60,9 @@ func NewApp(opts ...Option) *ApplicationContext {
 	for _, m := range opts {
 		m(&instance.conf)
 	}
+	if instance.conf.Raft.NodeId == "" {
+		instance.conf.Raft.NodeId = fmt.Sprintf("%s:%d", instance.conf.PeerIp, instance.conf.Port)
+	}
 	instance.initGrpc()
 	// 实例化调度引擎
 	instance.Scheduler = NewScheduler(instance.conf.SchedulerThreadCount)
@@ -69,16 +74,17 @@ func NewApp(opts ...Option) *ApplicationContext {
 // 当前节点选举为leader身份时需要加载未完成异步job
 func (s *ApplicationContext) watchRaftLeader() {
 	for isLeader := range s.raft.LeaderCh() {
+		s.isLeader = isLeader
 		if isLeader {
 			s.updateCurrentNacosRole(enum.LeaderRaftRole)
-			glog.Infof("ApplicationContext/watchRaftLeader 当前raft节点(%s,%s)获取leader身份", s.conf.Raft.NodeId, s.getPeerAddr())
+			glog.Infof("ApplicationContext/watchRaftLeader 当前raft节点(%s)获取leader身份", s.conf.Raft.NodeId)
 
 			// 更新配置中心leaderState值
 			s.updateLeaderStateConfig()
 
 			time.AfterFunc(time.Minute, func() {
 				// 1分钟后检查是否满足重启job条件
-				if !s.IsLeaderNode() {
+				if !s.isLeader {
 					return
 				}
 				s.restartUndoneAsyncJob()
@@ -88,9 +94,9 @@ func (s *ApplicationContext) watchRaftLeader() {
 			continue
 		}
 		s.updateCurrentNacosRole(enum.FollowerRaftRole)
-		glog.Infof("ApplicationContext/watchRaftLeader 当前raft节点(%s,%s)失去leader身份", s.conf.Raft.NodeId, s.getPeerAddr())
+		glog.Infof("ApplicationContext/watchRaftLeader 当前raft节点(%s)失去leader身份", s.conf.Raft.NodeId)
 		for _, job := range s.jobContainer.GetAll() {
-			util.CancelNotify(job.Ctx, job.Job, fmt.Sprintf("当前raft节点(%s,%s)失去leader身份,取消正在运行job", s.conf.Raft.NodeId, s.getPeerAddr()))
+			util.CancelNotify(job.Ctx, job.Job, fmt.Sprintf("当前raft节点(%s)失去leader身份,取消正在运行job", s.conf.Raft.NodeId))
 			job.Job.Job.Status = int32(enum.SystemExceptionJobStatus)
 		}
 		s.jobContainer.RemoveAll()
@@ -132,10 +138,6 @@ func (s *ApplicationContext) initDefaultConfig() {
 		s.conf.SchedulerThreadCount = 100
 	}
 
-	s.conf.Raft.NodeId = os.Getenv("NODE_ID")
-	if s.conf.Raft.NodeId == "" {
-		s.conf.Raft.NodeId, _ = os.Hostname()
-	}
 	s.conf.Raft.DataDir = os.Getenv("RAFT_DATA_DIR")
 	if s.conf.Raft.DataDir == "" {
 		s.conf.Raft.DataDir = "./data"
@@ -175,35 +177,35 @@ func (s *ApplicationContext) Run() error {
 	// 注册服务(服务发现)
 	err := s.initNacos()
 	if err != nil {
-		glog.Errorf("Application/run 注册服务异常,err:%v", err)
+		glog.Errorf("ApplicationContext/run 注册服务异常,err:%v", err)
 		return err
 	}
 
 	// 初始化数据库引擎
 	err = s.initDatabase()
 	if err != nil {
-		glog.Errorf("Application/run 初始化数据库引擎异常,err:%v", err)
+		glog.Errorf("ApplicationContext/run 初始化数据库引擎异常,err:%v", err)
 		return err
 	}
 
 	// 初始化raft选举机制
 	err = s.initRaft()
 	if err != nil {
-		glog.Errorf("Application/run 初始化raft选举异常,err:%v", err)
+		glog.Errorf("ApplicationContext/run 初始化raft选举异常,err:%v", err)
 		return err
 	}
 
 	// 监听scheduler服务发现
 	err = s.watchSchedulerService()
 	if err != nil {
-		glog.Errorf("Application/run 监听scheduler服务发现异常,err:%v", err)
+		glog.Errorf("ApplicationContext/run 监听scheduler服务发现异常,err:%v", err)
 		return err
 	}
 
 	// 监听worker服务发现
 	err = s.watchWorkerService()
 	if err != nil {
-		glog.Errorf("Application/run 监听worker服务发现异常,err:%v", err)
+		glog.Errorf("ApplicationContext/run 监听worker服务发现异常,err:%v", err)
 		return err
 	}
 
@@ -213,15 +215,15 @@ func (s *ApplicationContext) Run() error {
 	// 初始化调度器引擎
 	err = s.Scheduler.Init()
 	if err != nil {
-		glog.Errorf("Application/run 初始化调度器异常,err:%v", err)
+		glog.Errorf("ApplicationContext/run 初始化调度器异常,err:%v", err)
 		return err
 	}
 
-	glog.Infof("调度器(%s)已启动,endpoint地址:%s", s.conf.AppName, s.getPeerAddr())
+	glog.Infof("调度器(%s)已启动,endpoint地址:%s", s.conf.AppName, s.conf.Raft.NodeId)
 	// 初始化grpc服务
 	err = s.doServe()
 	if err != nil {
-		glog.Errorf("Application/run 监听grpc服务异常,err:%v", err)
+		glog.Errorf("ApplicationContext/run 监听grpc服务异常,err:%v", err)
 		return err
 	}
 	return nil
@@ -239,6 +241,7 @@ func (s *ApplicationContext) pullAllWorker() {
 			JobNotifySet: strings.Split(item.Metadata["jobNotifySet"], ","),
 		})
 	}
+	glog.Infof("ApplicationContext/pullAllWorker 当前节点:%s，最新worker列表:%s", s.conf.Raft.NodeId, kit.JsonEncode(nodeList))
 	s.Scheduler.BatchUpdateWorkerIndex(nodeList)
 }
 
@@ -272,9 +275,9 @@ func (s *ApplicationContext) initRaft() error {
 		Level: hclog.LevelFromString(c.LogLevel),
 	})
 
-	c.LocalID = raft.ServerID(s.conf.Raft.NodeId)
+	c.LocalID = raft.ServerID(s.endpointToNodeId(s.conf.Raft.NodeId))
 
-	baseDir := filepath.Join(s.conf.Raft.DataDir, s.conf.Raft.NodeId)
+	baseDir := filepath.Join(s.conf.Raft.DataDir, s.endpointToNodeId(s.conf.Raft.NodeId))
 	_ = os.MkdirAll(baseDir, os.ModePerm)
 
 	ldb, err := boltdb.NewBoltStore(filepath.Join(baseDir, "logs.dat"))
@@ -312,8 +315,8 @@ func (s *ApplicationContext) initRaft() error {
 		Servers: []raft.Server{
 			{
 				Suffrage: raft.Voter,
-				ID:       raft.ServerID(s.conf.Raft.NodeId),
-				Address:  raft.ServerAddress(s.getPeerAddr()),
+				ID:       raft.ServerID(s.endpointToNodeId(s.conf.Raft.NodeId)),
+				Address:  raft.ServerAddress(s.conf.Raft.NodeId),
 			},
 		},
 	}
@@ -331,6 +334,10 @@ func (s *ApplicationContext) initRaft() error {
 		s.updateNacosInstance(item)
 	}
 	return nil
+}
+
+func (s *ApplicationContext) endpointToNodeId(endpoint string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(endpoint, ".", "_"), ":", "_")
 }
 
 // nacos服务实例
@@ -403,24 +410,20 @@ func (s *ApplicationContext) getListenAddr() string {
 	return fmt.Sprintf(":%d", s.conf.Port)
 }
 
-func (s *ApplicationContext) getPeerAddr() string {
-	return fmt.Sprintf("%s:%d", s.conf.PeerIp, s.conf.Port)
-}
-
 // 动态添加节点
-func (s *ApplicationContext) AddPeer(nodeId, addr string) error {
+func (s *ApplicationContext) AddPeer(nodeId string) error {
 	serverList := s.raft.GetConfiguration().Configuration().Servers
 	for _, item := range serverList {
-		if item.ID == raft.ServerID(nodeId) {
+		if item.ID == raft.ServerID(s.endpointToNodeId(nodeId)) {
 			return nil
 		}
 	}
-	rs := s.raft.AddVoter(raft.ServerID(nodeId), raft.ServerAddress(addr), 0, 5*time.Second)
+	rs := s.raft.AddVoter(raft.ServerID(s.endpointToNodeId(nodeId)), raft.ServerAddress(nodeId), 0, 5*time.Second)
 	if err := rs.Error(); err != nil {
-		glog.Errorf("Application/AddPeer 当前节点:%s，新增从节点(%s,%s)失败,err:%+v", s.conf.Raft.NodeId, nodeId, addr, err)
+		glog.Errorf("ApplicationContext/AddPeer 当前节点:%s，新增从节点(%s)失败,err:%+v", s.conf.Raft.NodeId, nodeId, err)
 		return err
 	}
-	glog.Infof("Application/AddPeer 当前节点:%s，新增从节点(%s,%s)成功", s.conf.Raft.NodeId, nodeId, addr)
+	glog.Infof("ApplicationContext/AddPeer 当前节点:%s，新增从节点(%s)成功", s.conf.Raft.NodeId, nodeId)
 	return nil
 }
 
@@ -440,10 +443,10 @@ func (s *ApplicationContext) RemovePeer(nodeId string) error {
 
 	rs := s.raft.RemoveServer(raft.ServerID(nodeId), 0, 5*time.Second)
 	if err := rs.Error(); err != nil {
-		glog.Errorf("Application/RemovePeer 当前节点:%s，移除从节点(%s)失败,err:%+v", s.conf.Raft.NodeId, nodeId, err)
+		glog.Errorf("ApplicationContext/RemovePeer 当前节点:%s，移除从节点(%s)失败,err:%+v", s.conf.Raft.NodeId, nodeId, err)
 		return err
 	}
-	glog.Infof("Application/RemovePeer 当前节点:%s，移除从节点(%s)成功", s.conf.Raft.NodeId, nodeId)
+	glog.Infof("ApplicationContext/RemovePeer 当前节点:%s，移除从节点(%s)成功", s.conf.Raft.NodeId, nodeId)
 	return nil
 }
 
@@ -511,7 +514,7 @@ func (s *ApplicationContext) initNacos() error {
 		return fmt.Errorf("当前节点:%s，注册服务发现异常:%v", s.conf.Raft.NodeId, err)
 	}
 	if !success {
-		return fmt.Errorf("当前节点:%s，注册服务(%s)失败", s.conf.Raft.NodeId, s.getPeerAddr())
+		return fmt.Errorf("当前节点:%s，注册服务(%s)失败", s.conf.Raft.NodeId, s.conf.Raft.NodeId)
 	}
 	return nil
 }
@@ -525,7 +528,8 @@ func (s *ApplicationContext) watchWorkerService() error {
 			s.conf.Nacos.ClusterName,
 		},
 		SubscribeCallback: func(services []nacosModel.SubscribeService, nacosErr error) {
-			if !s.IsLeaderNode() {
+			glog.Infof("ApplicationContext/watchWorkerService 当前节点:%s，收到worker服务发现通知:%s,%v", s.conf.Raft.NodeId, kit.JsonEncode(services), nacosErr)
+			if !s.isLeader {
 				return
 			}
 			s.pullAllWorker()
@@ -542,7 +546,8 @@ func (s *ApplicationContext) watchSchedulerService() error {
 			s.conf.Nacos.ClusterName,
 		},
 		SubscribeCallback: func(services []nacosModel.SubscribeService, nacosErr error) {
-			if !s.IsLeaderNode() {
+			glog.Infof("ApplicationContext/watchSchedulerService 当前节点:%s，收到scheduler服务发现通知:%s,%v", s.conf.Raft.NodeId, kit.JsonEncode(services), nacosErr)
+			if !s.isLeader {
 				return
 			}
 
@@ -552,53 +557,44 @@ func (s *ApplicationContext) watchSchedulerService() error {
 				serviceMap[fmt.Sprintf("%s:%d", item.Ip, item.Port)] = struct{}{}
 			}
 
-			raftNodeList := s.raft.GetConfiguration().Configuration().Servers
-			nodeMap := make(map[string]string, len(raftNodeList))
-
-			for _, item := range raftNodeList {
-				if _, ok := serviceMap[string(item.Address)]; ok {
+			for _, item := range s.schedulerServiceList {
+				if _, ok := serviceMap[item.Endpoint]; ok {
 					continue
 				}
 				// 当服务不正常则从raft集群移除
-				err := s.RemovePeer(string(item.ID))
+				err := s.RemovePeer(s.endpointToNodeId(item.Endpoint))
 				if err != nil {
-					glog.Errorf("Application/watchSchedulerService 当前节点:%s，移除节点信息:%s，移除raft节点失败:%v", s.conf.Raft.NodeId, kit.JsonEncode(item), err)
+					glog.Errorf("ApplicationContext/watchSchedulerService 当前节点:%s，移除节点信息:%s，移除raft节点失败:%v", s.conf.Raft.NodeId, kit.JsonEncode(item), err)
 				}
 			}
 
-			for _, item := range raftNodeList {
-				nodeMap[string(item.Address)] = string(item.ID)
+			nodeMap := make(map[string]struct{}, len(s.schedulerServiceList))
+			for _, item := range s.schedulerServiceList {
+				nodeMap[item.Endpoint] = struct{}{}
 			}
 
 			for _, item := range serviceList {
 				if _, ok := nodeMap[fmt.Sprintf("%s:%d", item.Ip, item.Port)]; ok {
 					continue
 				}
-				err := s.AddPeer(item.Metadata["nodeId"], fmt.Sprintf("%s:%d", item.Ip, item.Port))
+				nodeId := fmt.Sprintf("%s:%d", item.Ip, item.Port)
+				err := s.AddPeer(nodeId)
 				if err != nil {
-					glog.Errorf("Application/watchSchedulerService 当前节点:%s，新增节点信息:%s，添加raft节点失败:%v", s.conf.Raft.NodeId, kit.JsonEncode(item), err)
+					glog.Errorf("ApplicationContext/watchSchedulerService 当前节点:%s，新增节点信息:%s，添加raft节点失败:%v", s.conf.Raft.NodeId, kit.JsonEncode(item), err)
 				}
 			}
 		},
 	})
 }
 
-// 判断是否为主节点
-func (s *ApplicationContext) IsLeaderNode() bool {
-	future := s.raft.VerifyLeader()
-	return future.Error() == nil
-}
-
 // 获取主节点信息
 func (s *ApplicationContext) GetLeaderNode() dto.NodeInfo {
-	leaderServer := s.raft.Leader()
 	node := dto.NodeInfo{}
-	serverList := s.raft.GetConfiguration().Configuration().Servers
-	for _, item := range serverList {
-		if strings.HasSuffix(string(item.Address), string(leaderServer)) {
-			node.NodeId = string(item.ID)
-			node.Endpoint = string(item.Address)
-			break
+	serviceList := s.getServiceList(s.conf.AppName)
+	for _, v := range serviceList {
+		if v.Metadata["role"] == string(enum.LeaderRaftRole) {
+			node.Endpoint = fmt.Sprintf("%s:%d", v.Ip, v.Port)
+			return node
 		}
 	}
 
