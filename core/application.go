@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ppkg/distributed-scheduler/dto"
 	"github.com/ppkg/distributed-scheduler/enum"
 	"github.com/ppkg/distributed-scheduler/repository"
 	"github.com/ppkg/distributed-scheduler/repository/impl"
@@ -34,12 +33,12 @@ import (
 )
 
 type ApplicationContext struct {
-	isLeader             bool
-	schedulerServiceList []dto.NodeInfo
-	conf                 Config
-	raft                 *raft.Raft
-	tm                   *transport.Manager
-	grpcServer           *grpc.Server
+	isLeader         bool
+	schedulerNodeIds []string
+	conf             Config
+	raft             *raft.Raft
+	tm               *transport.Manager
+	grpcServer       *grpc.Server
 	// nacos服务发现客户端
 	namingClient namingClient.INamingClient
 	// nacos配置服务客户端
@@ -412,9 +411,8 @@ func (s *ApplicationContext) getListenAddr() string {
 
 // 动态添加节点
 func (s *ApplicationContext) AddPeer(nodeId string) error {
-	serverList := s.raft.GetConfiguration().Configuration().Servers
-	for _, item := range serverList {
-		if item.ID == raft.ServerID(s.endpointToNodeId(nodeId)) {
+	for _, item := range s.schedulerNodeIds {
+		if item == nodeId {
 			return nil
 		}
 	}
@@ -557,48 +555,50 @@ func (s *ApplicationContext) watchSchedulerService() error {
 				serviceMap[fmt.Sprintf("%s:%d", item.Ip, item.Port)] = struct{}{}
 			}
 
-			for _, item := range s.schedulerServiceList {
-				if _, ok := serviceMap[item.Endpoint]; ok {
+			for _, item := range s.schedulerNodeIds {
+				if _, ok := serviceMap[item]; ok {
 					continue
 				}
 				// 当服务不正常则从raft集群移除
-				err := s.RemovePeer(s.endpointToNodeId(item.Endpoint))
+				err := s.RemovePeer(s.endpointToNodeId(item))
 				if err != nil {
-					glog.Errorf("ApplicationContext/watchSchedulerService 当前节点:%s，移除节点信息:%s，移除raft节点失败:%v", s.conf.Raft.NodeId, kit.JsonEncode(item), err)
+					glog.Errorf("ApplicationContext/watchSchedulerService 当前节点:%s，移除节点信息:%s，移除raft节点失败:%v", s.conf.Raft.NodeId, item, err)
 				}
+				glog.Errorf("ApplicationContext/watchSchedulerService 当前节点:%s，移除节点信息(%s)成功", s.conf.Raft.NodeId, item, err)
 			}
 
-			nodeMap := make(map[string]struct{}, len(s.schedulerServiceList))
-			for _, item := range s.schedulerServiceList {
-				nodeMap[item.Endpoint] = struct{}{}
+			nodeMap := make(map[string]struct{}, len(s.schedulerNodeIds))
+			for _, item := range s.schedulerNodeIds {
+				nodeMap[item] = struct{}{}
 			}
 
 			for _, item := range serviceList {
-				if _, ok := nodeMap[fmt.Sprintf("%s:%d", item.Ip, item.Port)]; ok {
+				nodeId := fmt.Sprintf("%s:%d", item.Ip, item.Port)
+				if _, ok := nodeMap[nodeId]; ok {
 					continue
 				}
-				nodeId := fmt.Sprintf("%s:%d", item.Ip, item.Port)
+
 				err := s.AddPeer(nodeId)
 				if err != nil {
 					glog.Errorf("ApplicationContext/watchSchedulerService 当前节点:%s，新增节点信息:%s，添加raft节点失败:%v", s.conf.Raft.NodeId, kit.JsonEncode(item), err)
+					continue
 				}
+				glog.Errorf("ApplicationContext/watchSchedulerService 当前节点:%s，新增节点信息(%s)成功", s.conf.Raft.NodeId, kit.JsonEncode(item), err)
 			}
 		},
 	})
 }
 
 // 获取主节点信息
-func (s *ApplicationContext) GetLeaderNode() dto.NodeInfo {
-	node := dto.NodeInfo{}
+func (s *ApplicationContext) GetLeaderNode() string {
 	serviceList := s.getServiceList(s.conf.AppName)
 	for _, v := range serviceList {
 		if v.Metadata["role"] == string(enum.LeaderRaftRole) {
-			node.Endpoint = fmt.Sprintf("%s:%d", v.Ip, v.Port)
-			return node
+			return fmt.Sprintf("%s:%d", v.Ip, v.Port)
 		}
 	}
 
-	return node
+	return ""
 }
 
 // 应用配置
