@@ -392,11 +392,6 @@ func (s *ApplicationContext) restartUndoneAsyncJob() {
 		return
 	}
 
-	// 此刻当前节点不是leader身份则直接跳过
-	if !s.isLeader {
-		return
-	}
-
 	myList := make([]*dto.JobInfo, 0, len(list))
 	for _, item := range list {
 		// 如果job在容器中执行了则跳过
@@ -407,6 +402,7 @@ func (s *ApplicationContext) restartUndoneAsyncJob() {
 	}
 
 	if len(myList) == 0 {
+		glog.Infof("ApplicationContext/restartUndoneAsyncJob 没有任何job需要重启")
 		return
 	}
 

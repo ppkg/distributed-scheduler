@@ -17,6 +17,4 @@ message GetLeaderResponse { NodeInfo NodeInfo = 1; }
 message NodeInfo {
   // 服务器地址
   string Endpoint = 1;
-  // 节点ID
-  string NodeId = 2;
 }

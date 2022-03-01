@@ -84,6 +84,7 @@ func (s *ApplicationContext) watchRaftLeader() {
 			time.AfterFunc(time.Minute, func() {
 				// 1分钟后检查是否满足重启job条件
 				if !s.isLeader {
+					glog.Infof("ApplicationContext/watchRaftLeader 已经失去leader身份跳过job重启")
 					return
 				}
 				s.restartUndoneAsyncJob()
