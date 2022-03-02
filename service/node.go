@@ -18,12 +18,11 @@ type nodeService struct {
 func (s *nodeService) GetLeader(ctx context.Context, _ *empty.Empty) (*node.GetLeaderResponse, error) {
 	endpoit := s.appCtx.GetLeaderNode()
 	if endpoit == "" {
-		return nil, errors.New("调度器主节点正在选举中...")
+		return nil, errors.New("调度器leader节点正在选举中")
 	}
 	return &node.GetLeaderResponse{
 		NodeInfo: &node.NodeInfo{
 			Endpoint: endpoit,
-			NodeId:   endpoit,
 		},
 	}, nil
 }
