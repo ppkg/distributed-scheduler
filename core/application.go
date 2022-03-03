@@ -381,9 +381,13 @@ func (s *ApplicationContext) getCurrentNacosInstance() *nacosModel.Instance {
 
 // 初始化GRPC服务
 func (s *ApplicationContext) initGrpc() {
+	maxSize := 30 * 1024 * 1024
 	s.tm = transport.New(raft.ServerAddress(s.getListenAddr()), []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(30 * 1024 * 1024)),
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(maxSize),
+			grpc.MaxCallSendMsgSize(maxSize),
+		),
 	})
 	s.grpcServer = grpc.NewServer()
 	s.tm.Register(s.grpcServer)
