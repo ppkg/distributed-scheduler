@@ -383,6 +383,7 @@ func (s *ApplicationContext) getCurrentNacosInstance() *nacosModel.Instance {
 func (s *ApplicationContext) initGrpc() {
 	s.tm = transport.New(raft.ServerAddress(s.getListenAddr()), []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(30 * 1024 * 1024)),
 	})
 	s.grpcServer = grpc.NewServer()
 	s.tm.Register(s.grpcServer)
