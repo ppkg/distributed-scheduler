@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ppkg/distributed-scheduler/enum"
@@ -34,11 +35,12 @@ import (
 
 type ApplicationContext struct {
 	isLeader         bool
-	schedulerNodeIds []string
-	conf             Config
-	raft             *raft.Raft
-	tm               *transport.Manager
-	grpcServer       *grpc.Server
+	schedulerNodeIds sync.Map
+
+	conf       Config
+	raft       *raft.Raft
+	tm         *transport.Manager
+	grpcServer *grpc.Server
 	// nacos服务发现客户端
 	namingClient namingClient.INamingClient
 	// nacos配置服务客户端
@@ -417,10 +419,8 @@ func (s *ApplicationContext) getListenAddr() string {
 
 // 动态添加节点
 func (s *ApplicationContext) AddPeer(nodeId string) error {
-	for _, item := range s.schedulerNodeIds {
-		if item == nodeId {
-			return nil
-		}
+	if _, ok := s.schedulerNodeIds.Load(nodeId); ok {
+		return nil
 	}
 	rs := s.raft.AddVoter(raft.ServerID(s.endpointToNodeId(nodeId)), raft.ServerAddress(nodeId), 0, 5*time.Second)
 	if err := rs.Error(); err != nil {
@@ -561,26 +561,31 @@ func (s *ApplicationContext) watchSchedulerService() error {
 				serviceMap[fmt.Sprintf("%s:%d", item.Ip, item.Port)] = struct{}{}
 			}
 
-			for _, item := range s.schedulerNodeIds {
-				if _, ok := serviceMap[item]; ok {
-					continue
+			var delNodeIds []string
+			s.schedulerNodeIds.Range(func(key, value interface{}) bool {
+				nodeId := key.(string)
+				if _, ok := serviceMap[nodeId]; ok {
+					return true
 				}
 				// 当服务不正常则从raft集群移除
-				err := s.RemovePeer(s.endpointToNodeId(item))
+				err := s.RemovePeer(s.endpointToNodeId(nodeId))
 				if err != nil {
-					glog.Errorf("ApplicationContext/watchSchedulerService 当前节点:%s，移除节点信息:%s，移除raft节点失败:%+v", s.conf.Raft.NodeId, item, err)
+					glog.Errorf("ApplicationContext/watchSchedulerService 当前节点:%s，移除节点信息:%s，移除raft节点失败:%+v", s.conf.Raft.NodeId, nodeId, err)
+					return true
 				}
-				glog.Errorf("ApplicationContext/watchSchedulerService 当前节点:%s，移除节点信息成功:%s", s.conf.Raft.NodeId, item)
-			}
-
-			nodeMap := make(map[string]struct{}, len(s.schedulerNodeIds))
-			for _, item := range s.schedulerNodeIds {
-				nodeMap[item] = struct{}{}
+				delNodeIds = append(delNodeIds, nodeId)
+				glog.Errorf("ApplicationContext/watchSchedulerService 当前节点:%s，移除节点信息成功:%s", s.conf.Raft.NodeId, nodeId)
+				return true
+			})
+			if len(delNodeIds) > 0 {
+				for _, v := range delNodeIds {
+					s.schedulerNodeIds.Delete(v)
+				}
 			}
 
 			for _, item := range serviceList {
 				nodeId := fmt.Sprintf("%s:%d", item.Ip, item.Port)
-				if _, ok := nodeMap[nodeId]; ok {
+				if _, ok := s.schedulerNodeIds.Load(nodeId); ok {
 					continue
 				}
 
@@ -589,6 +594,7 @@ func (s *ApplicationContext) watchSchedulerService() error {
 					glog.Errorf("ApplicationContext/watchSchedulerService 当前节点:%s，新增节点信息:%s，添加raft节点失败:%+v", s.conf.Raft.NodeId, kit.JsonEncode(item), err)
 					continue
 				}
+				s.schedulerNodeIds.Store(nodeId, struct{}{})
 				glog.Errorf("ApplicationContext/watchSchedulerService 当前节点:%s，新增节点信息成功:%s", s.conf.Raft.NodeId, kit.JsonEncode(item))
 			}
 		},
