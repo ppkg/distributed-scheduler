@@ -1,6 +1,8 @@
 package impl
 
 import (
+	"time"
+
 	"github.com/ppkg/distributed-scheduler/enum"
 	"github.com/ppkg/distributed-scheduler/model"
 	"github.com/ppkg/distributed-scheduler/repository"
@@ -8,6 +10,10 @@ import (
 	"github.com/maybgit/glog"
 	"github.com/ppkg/kit"
 	"gorm.io/gorm"
+)
+
+const (
+	stdDateTimeFormat = "2006-01-02 15:04:05"
 )
 
 type jobRepositoryImpl struct {
@@ -44,10 +50,10 @@ func (s jobRepositoryImpl) List(db *gorm.DB, params map[string]interface{}) ([]*
 		db = db.Where("id=?", val)
 	}
 	if val, ok := params["startTime"]; ok {
-		db = db.Where("create_time>=?", val)
+		db = db.Where("create_time>=?", val.(time.Time).Format(stdDateTimeFormat))
 	}
 	if val, ok := params["endTime"]; ok {
-		db = db.Where("create_time<?", val)
+		db = db.Where("create_time<?", val.(time.Time).Format(stdDateTimeFormat))
 	}
 	if val, ok := params["status"]; ok {
 		db = db.Where("status=?", val)
