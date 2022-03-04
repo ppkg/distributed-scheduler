@@ -91,7 +91,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 				if item.Message == "" {
 					continue
 				}
-				msgList = append(msgList, fmt.Sprintf("task(%d,%s)->%s", item.Id, item.Name, item.Message))
+				msgList = append(msgList, item.Message)
 			}
 			jobInfo.Job.Message = strings.Join(msgList, ";")
 		}
@@ -100,15 +100,13 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 		jobInfo.Job.Message = cancelParam.Reason
 	}
 
-	// 如果job是已完成状态则进行合并结果
-	if enum.JobStatus(jobInfo.Job.Status) == enum.FinishJobStatus {
-		result, err := jobInfo.Reduce()
-		if err != nil {
-			glog.Errorf("ApplicationContext/StartJob 合并task数据异常,%v", err)
-			return err
-		}
-		jobInfo.Job.Result = result
+	// 合并task结果
+	result, err := jobInfo.Reduce()
+	if err != nil {
+		glog.Errorf("ApplicationContext/StartJob 合并task数据异常,%v", err)
+		return err
 	}
+	jobInfo.Job.Result = result
 
 	// 保存job状态
 	jobInfo.Job.FinishTime = time.Now()
