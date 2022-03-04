@@ -197,7 +197,7 @@ func (s *scheduleEngine) IsEmptyWorker() bool {
 
 // 推送任务
 func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error {
-	tryCount := 3
+	tryCount := 4
 	plugin := task.Plugin
 	if dto.IsParallelPlugin(plugin) {
 		plugin = task.SubPlugin
@@ -210,7 +210,7 @@ func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error 
 		}
 		glog.Errorf("ScheduleEngine/processTask 优先给自己worker推送task异常,worker:%s,taskId:%d,err:%+v", kit.JsonEncode(worker), task.Id, err)
 	} else {
-		tryCount = 4
+		tryCount = 5
 	}
 
 	// 自己worker执行失败则交给其他worker来执行
@@ -441,7 +441,7 @@ func (s *scheduleEngine) buildLimitRateTaskFunc(job *dto.JobInfo, task InputTask
 
 // 限流task推送处理
 func (s *scheduleEngine) processLimitRateTask(task *model.Task) error {
-	tryCount := 4
+	tryCount := 5
 	plugin := task.Plugin
 	if dto.IsParallelPlugin(plugin) {
 		plugin = task.SubPlugin
@@ -511,7 +511,7 @@ func (s *scheduleEngine) DispatchJobNotify(job *dto.JobInfo, callback func(job *
 			}
 		}()
 
-		tryCount := 3
+		tryCount := 4
 		// 优先给自己worker执行,不过要先判断自己是否支持当前job通知类型
 		if util.IsSupportHandler(worker.JobNotifySet, job.Job.Type) {
 			err = s.pushJobNotify(worker, job)
@@ -520,7 +520,7 @@ func (s *scheduleEngine) DispatchJobNotify(job *dto.JobInfo, callback func(job *
 			}
 			glog.Errorf("ScheduleEngine/DispatchJobNotify 优先给自己worker推送job回调通知异常,worker:%s,jobId:%d,err:%+v", kit.JsonEncode(worker), job.Job.Id, err)
 		} else {
-			tryCount = 4
+			tryCount = 5
 		}
 
 		// 自己worker执行失败则交给其他worker来执行
@@ -574,7 +574,7 @@ func (s *scheduleEngine) pushJobNotify(worker WorkerNode, j *dto.JobInfo) error 
 // 处理job开始执行通知
 func (s *scheduleEngine) doPostStart(worker WorkerNode, job *dto.JobInfo) {
 	var err error
-	tryCount := 3
+	tryCount := 4
 	// 优先给自己worker执行,不过要先判断自己是否支持当前job通知类型
 	if util.IsSupportHandler(worker.JobNotifySet, job.Job.Type) {
 		err = s.pushPostStart(worker, job)
@@ -583,7 +583,7 @@ func (s *scheduleEngine) doPostStart(worker WorkerNode, job *dto.JobInfo) {
 		}
 		glog.Errorf("ScheduleEngine/dispatchPostStart 优先给自己worker推送job开始执行事件异常,worker:%s,jobId:%d,err:%+v", kit.JsonEncode(worker), job.Job.Id, err)
 	} else {
-		tryCount = 4
+		tryCount = 5
 	}
 
 	// 自己worker执行失败则交给其他worker来执行

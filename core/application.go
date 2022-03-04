@@ -236,15 +236,31 @@ func (s *ApplicationContext) pullAllWorker() {
 	list := s.getServiceList(s.conf.WorkerServiceName)
 	nodeList := make([]WorkerNode, 0, len(list))
 	for _, item := range list {
-		nodeList = append(nodeList, WorkerNode{
+		node := WorkerNode{
 			NodeId:       item.Metadata["nodeId"],
 			Endpoint:     fmt.Sprintf("%s:%d", item.Ip, item.Port),
 			PluginSet:    strings.Split(item.Metadata["pluginSet"], ","),
 			JobNotifySet: strings.Split(item.Metadata["jobNotifySet"], ","),
-		})
+		}
+		// 检测grpc是否可以正常通信
+		if !s.checkNodeAlive(node.Endpoint) {
+			continue
+		}
+		nodeList = append(nodeList, node)
 	}
+
 	glog.Infof("ApplicationContext/pullAllWorker 当前节点:%s，最新worker列表:%s", s.conf.Raft.NodeId, kit.JsonEncode(nodeList))
 	s.Scheduler.BatchUpdateWorkerIndex(nodeList)
+}
+
+// 检查节点连接是否正常
+func (s *ApplicationContext) checkNodeAlive(endpoint string) bool {
+	conn, err := grpc.Dial(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
 }
 
 // 获取健康的服务列表
