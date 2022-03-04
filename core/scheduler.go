@@ -208,7 +208,7 @@ func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error 
 		if err == nil {
 			return nil
 		}
-		glog.Errorf("ScheduleEngine/processTask 优先给自己worker推送task异常,worker:%s,taskId:%d,err:%+v", kit.JsonEncode(worker), task.Id, err)
+		glog.Errorf("ScheduleEngine/processTask 优先给自己worker推送task异常:%+v,worker:%s,taskId:%d", err, kit.JsonEncode(worker), task.Id)
 	} else {
 		tryCount = 5
 	}
@@ -216,7 +216,7 @@ func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error 
 	// 自己worker执行失败则交给其他worker来执行
 	workers, err := s.predicateWorker(plugin)
 	if err != nil {
-		glog.Errorf("ScheduleEngine/processTask 预选worker节点异常,taskId:%d,err:%+v", task.Id, err)
+		glog.Errorf("ScheduleEngine/processTask 预选worker节点异常:%+v,taskId:%d", err, task.Id)
 		return err
 	}
 
@@ -230,7 +230,7 @@ func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error 
 			return nil
 		}
 		excludeWorkers = s.appendExcludeWorker(excludeWorkers, myWorker)
-		glog.Errorf("ScheduleEngine/processTask 第%d次推送任务异常,worker:%s,taskId:%d,err:%+v", i+1, kit.JsonEncode(myWorker), task.Id, err)
+		glog.Errorf("ScheduleEngine/processTask 第%d次推送任务异常:%+v,worker:%s,taskId:%d", i+1, err, kit.JsonEncode(myWorker), task.Id)
 	}
 
 	return err
@@ -448,7 +448,7 @@ func (s *scheduleEngine) processLimitRateTask(task *model.Task) error {
 	}
 	workers, err := s.predicateWorker(plugin)
 	if err != nil {
-		glog.Errorf("ScheduleEngine/processLimitRateTask 预选worker节点异常,taskId:%d,err:%+v", task.Id, err)
+		glog.Errorf("ScheduleEngine/processLimitRateTask 预选worker节点异常:%+v,taskId:%d", task.Id)
 		return err
 	}
 
@@ -462,7 +462,7 @@ func (s *scheduleEngine) processLimitRateTask(task *model.Task) error {
 			return nil
 		}
 		excludeWorkers = s.appendExcludeWorker(excludeWorkers, myWorker)
-		glog.Errorf("ScheduleEngine/processLimitRateTask 第%d次推送任务异常,worker:%s,taskId:%d,err:%+v", i+1, kit.JsonEncode(myWorker), task.Id, err)
+		glog.Errorf("ScheduleEngine/processLimitRateTask 第%d次推送任务异常:%+v,worker:%s,taskId:%d", i+1, err, kit.JsonEncode(myWorker), task.Id)
 	}
 
 	return err
@@ -492,7 +492,7 @@ func (s *scheduleEngine) buildTaskFunc(job *dto.JobInfo, task InputTask) func(wo
 			if dto.IsParallelPlugin(plugin) {
 				plugin = task.Task.SubPlugin
 			}
-			// 推送job开始执行事件
+			// 推送job开始执行通知
 			if task.Task.Sharding == 0 && strings.HasPrefix(job.Job.PluginSet, plugin) {
 				go s.doPostStart(worker, job)
 			}
@@ -518,7 +518,7 @@ func (s *scheduleEngine) DispatchJobNotify(job *dto.JobInfo, callback func(job *
 			if err == nil {
 				return
 			}
-			glog.Errorf("ScheduleEngine/DispatchJobNotify 优先给自己worker推送job回调通知异常,worker:%s,jobId:%d,err:%+v", kit.JsonEncode(worker), job.Job.Id, err)
+			glog.Errorf("ScheduleEngine/DispatchJobNotify 优先给自己worker推送job回调通知异常:%+v,worker:%s,jobId:%d", err, kit.JsonEncode(worker), job.Job.Id)
 		} else {
 			tryCount = 5
 		}
@@ -526,19 +526,22 @@ func (s *scheduleEngine) DispatchJobNotify(job *dto.JobInfo, callback func(job *
 		// 自己worker执行失败则交给其他worker来执行
 		workers, err := s.predicateJobNotifyWorker(job.Job.Type)
 		if err != nil {
-			glog.Errorf("ScheduleEngine/DispatchJobNotify 预选worker节点异常,jobId:%d,err:%+v", job.Job.Id, err)
+			glog.Errorf("ScheduleEngine/DispatchJobNotify 预选worker节点异常:%+v,jobId:%d", err, job.Job.Id)
 			return
 		}
 
+		// 优选worker时排除掉调度出错的worker
+		excludeWorkers := []WorkerNode{worker}
 		// 推送任务,如果推送失败则重推
 		for i := 0; i < tryCount; i++ {
-			myWorker := s.preferWorker(job.Job.Type, workers)
+			myWorker := s.preferWorker(job.Job.Type, workers, excludeWorkers...)
 			err = s.pushJobNotify(myWorker, job)
 			if err == nil {
 				return
 			}
-			err = fmt.Errorf("重试推送3次job回调通知异常,最后一次推送worker(%s),err:%+v", myWorker.NodeId, err)
-			glog.Errorf("ScheduleEngine/DispatchJobNotify 第%d次推送job回调通知异常,worker:%s,jobId:%d,err:%+v", i+1, kit.JsonEncode(myWorker), job.Job.Id, err)
+			excludeWorkers = s.appendExcludeWorker(excludeWorkers, myWorker)
+			glog.Errorf("ScheduleEngine/DispatchJobNotify 第%d次推送job回调通知异常:%+v,worker:%s,jobId:%d", i+1, err, kit.JsonEncode(myWorker), job.Job.Id)
+			err = fmt.Errorf("重试推送3次job回调通知异常:%+v,最后一次推送worker(%s)", err, myWorker.NodeId)
 		}
 	}
 	s.dispatchQueue <- fn
@@ -581,7 +584,7 @@ func (s *scheduleEngine) doPostStart(worker WorkerNode, job *dto.JobInfo) {
 		if err == nil {
 			return
 		}
-		glog.Errorf("ScheduleEngine/dispatchPostStart 优先给自己worker推送job开始执行事件异常,worker:%s,jobId:%d,err:%+v", kit.JsonEncode(worker), job.Job.Id, err)
+		glog.Errorf("ScheduleEngine/dispatchPostStart 优先给自己worker推送job开始执行通知异常:%+v,worker:%s,jobId:%d", err, kit.JsonEncode(worker), job.Job.Id)
 	} else {
 		tryCount = 5
 	}
@@ -589,23 +592,25 @@ func (s *scheduleEngine) doPostStart(worker WorkerNode, job *dto.JobInfo) {
 	// 自己worker执行失败则交给其他worker来执行
 	workers, err := s.predicateJobNotifyWorker(job.Job.Type)
 	if err != nil {
-		glog.Errorf("ScheduleEngine/dispatchPostStart 预选worker节点异常,jobId:%d,err:%+v", job.Job.Id, err)
+		glog.Errorf("ScheduleEngine/dispatchPostStart 预选worker节点异常:%+v,jobId:%d", err, job.Job.Id)
 		return
 	}
 
+	// 优选worker时排除掉调度出错的worker
+	excludeWorkers := []WorkerNode{worker}
 	// 推送任务,如果推送失败则重推
 	for i := 0; i < tryCount; i++ {
-		myWorker := s.preferWorker(job.Job.Type, workers)
+		myWorker := s.preferWorker(job.Job.Type, workers, excludeWorkers...)
 		err = s.pushPostStart(myWorker, job)
 		if err == nil {
 			return
 		}
-		err = fmt.Errorf("重试推送3次job开始执行事件异常,最后一次推送worker(%s),err:%+v", myWorker.NodeId, err)
-		glog.Errorf("ScheduleEngine/dispatchPostStart 第%d次推送job开始执行事件异常,worker:%s,jobId:%d,err:%+v", i+1, kit.JsonEncode(myWorker), job.Job.Id, err)
+		excludeWorkers = s.appendExcludeWorker(excludeWorkers, myWorker)
+		glog.Errorf("ScheduleEngine/dispatchPostStart 第%d次推送job开始执行通知异常:%+v,worker:%s,jobId:%d", i+1, err, kit.JsonEncode(myWorker), job.Job.Id)
 	}
 }
 
-// 推送job开始执行事件
+// 推送job开始执行通知
 func (s *scheduleEngine) pushPostStart(worker WorkerNode, j *dto.JobInfo) error {
 	conn, err := s.workerConns.Get(worker)
 	if err != nil {

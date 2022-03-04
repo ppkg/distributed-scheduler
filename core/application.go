@@ -248,9 +248,8 @@ func (s *ApplicationContext) pullAllWorker() {
 		}
 		nodeList = append(nodeList, node)
 	}
-
-	glog.Infof("ApplicationContext/pullAllWorker 当前节点:%s，最新worker列表:%s", s.conf.Raft.NodeId, kit.JsonEncode(nodeList))
 	s.Scheduler.BatchUpdateWorkerIndex(nodeList)
+	glog.Infof("ApplicationContext/pullAllWorker 当前节点:%s，最新worker列表:%s", s.conf.Raft.NodeId, kit.JsonEncode(s.Scheduler.pluginIndexer.GetAllWorker()))
 }
 
 // 检查节点连接是否正常
