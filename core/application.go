@@ -34,7 +34,9 @@ import (
 )
 
 type ApplicationContext struct {
-	isLeader         bool
+	isLeader bool
+	// 是否在拉取worker连接信息
+	isPullWorker     bool
 	schedulerNodeIds sync.Map
 
 	conf       Config
@@ -66,7 +68,7 @@ func NewApp(opts ...Option) *ApplicationContext {
 	}
 	instance.initGrpc()
 	// 实例化调度引擎
-	instance.Scheduler = NewScheduler(instance.conf.SchedulerThreadCount)
+	instance.Scheduler = NewScheduler(instance.conf.SchedulerThreadCount,instance.pullAllWorker)
 	return instance
 }
 
@@ -233,6 +235,14 @@ func (s *ApplicationContext) Run() error {
 
 // 全量拉取worker服务信息然后进行更新worker索引
 func (s *ApplicationContext) pullAllWorker() {
+	if s.isPullWorker {
+		return
+	}
+	s.isPullWorker = true
+	defer func() {
+		s.isPullWorker = false
+	}()
+
 	list := s.getServiceList(s.conf.WorkerServiceName)
 	nodeList := make([]WorkerNode, 0, len(list))
 	for _, item := range list {

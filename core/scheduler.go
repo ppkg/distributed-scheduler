@@ -18,11 +18,15 @@ import (
 	"github.com/panjf2000/ants/v2"
 	"github.com/ppkg/kit"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 // 调度引擎
 type scheduleEngine struct {
+	// 拉取worker方法
+	pullWorkerFn func()
 	// worker节点所支持plugin插件索引组件
 	pluginIndexer *workerIndexer
 	// worker节点所支持job回调通知索引组件
@@ -47,8 +51,9 @@ type scheduleEngine struct {
 	limitRateIndexer  map[string]string
 }
 
-func NewScheduler(workerThread int) *scheduleEngine {
+func NewScheduler(workerThread int, pullWorkerFn func()) *scheduleEngine {
 	engine := &scheduleEngine{
+		pullWorkerFn:      pullWorkerFn,
 		workerThreadCount: workerThread,
 		workerPools:       NewWorkerPools(),
 		pluginIndexer:     NewWorkerIndexer(),
@@ -209,6 +214,9 @@ func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error 
 			return nil
 		}
 		glog.Errorf("ScheduleEngine/processTask 优先给自己worker推送task异常:%+v,worker:%s,taskId:%d", err, kit.JsonEncode(worker), task.Id)
+		if s.isGrpcUnavailable(err) {
+			s.pullWorkerFn()
+		}
 	} else {
 		tryCount = 5
 	}
@@ -231,9 +239,29 @@ func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error 
 		}
 		excludeWorkers = s.appendExcludeWorker(excludeWorkers, myWorker)
 		glog.Errorf("ScheduleEngine/processTask 第%d次推送任务异常:%+v,worker:%s,taskId:%d", i+1, err, kit.JsonEncode(myWorker), task.Id)
+		if s.isGrpcUnavailable(err) {
+			s.pullWorkerFn()
+			workers, err = s.predicateWorker(plugin)
+			if err != nil {
+				glog.Errorf("ScheduleEngine/processTask 第%d次 获取最新worker节点异常:%+v,taskId:%d", i+1, err, task.Id)
+				return err
+			}
+		}
 	}
 
 	return err
+}
+
+// 是否grpc连接不可用
+func (s *scheduleEngine) isGrpcUnavailable(err error) bool {
+	grpcErr, ok := status.FromError(err)
+	if !ok {
+		return false
+	}
+	if grpcErr.Code() != codes.Unavailable {
+		return false
+	}
+	return true
 }
 
 func (s *scheduleEngine) appendExcludeWorker(list []WorkerNode, worker WorkerNode) []WorkerNode {
@@ -463,6 +491,14 @@ func (s *scheduleEngine) processLimitRateTask(task *model.Task) error {
 		}
 		excludeWorkers = s.appendExcludeWorker(excludeWorkers, myWorker)
 		glog.Errorf("ScheduleEngine/processLimitRateTask 第%d次推送任务异常:%+v,worker:%s,taskId:%d", i+1, err, kit.JsonEncode(myWorker), task.Id)
+		if s.isGrpcUnavailable(err) {
+			s.pullWorkerFn()
+			workers, err = s.predicateWorker(plugin)
+			if err != nil {
+				glog.Errorf("ScheduleEngine/processLimitRateTask 第%d次 获取最新worker节点异常:%+v,taskId:%d", i+1, err, task.Id)
+				return err
+			}
+		}
 	}
 
 	return err
