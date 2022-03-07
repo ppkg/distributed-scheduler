@@ -68,7 +68,7 @@ func NewApp(opts ...Option) *ApplicationContext {
 	}
 	instance.initGrpc()
 	// 实例化调度引擎
-	instance.Scheduler = NewScheduler(instance.conf.SchedulerThreadCount,instance.pullAllWorker)
+	instance.Scheduler = NewScheduler(instance.conf.SchedulerThreadCount, instance.pullAllWorker)
 	return instance
 }
 
@@ -81,6 +81,15 @@ func (s *ApplicationContext) watchRaftLeader() {
 		if isLeader {
 			s.updateCurrentNacosRole(enum.LeaderRaftRole)
 			glog.Infof("ApplicationContext/watchRaftLeader 当前raft节点(%s)获取leader身份", s.conf.Raft.NodeId)
+
+			// 30秒后再次确认自己身份
+			time.AfterFunc(30*time.Second, func() {
+				if !s.isLeader {
+					glog.Infof("ApplicationContext/watchRaftLeader 已经失去leader身份跳过确认leader身份")
+					return
+				}
+				s.makeSureLeaderRole()
+			})
 
 			// 更新配置中心leaderState值
 			s.updateLeaderStateConfig()
@@ -105,6 +114,18 @@ func (s *ApplicationContext) watchRaftLeader() {
 		}
 		s.jobContainer.RemoveAll()
 	}
+}
+
+// 确认leader身份
+func (s *ApplicationContext) makeSureLeaderRole() {
+	instance := s.getCurrentNacosInstance()
+	if instance == nil {
+		return
+	}
+	if instance.Metadata["role"] == string(enum.LeaderRaftRole) {
+		return
+	}
+	s.updateCurrentNacosRole(enum.LeaderRaftRole)
 }
 
 // 更新配置中心leaderState值
