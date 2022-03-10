@@ -370,7 +370,7 @@ func (s *workerConnMap) Get(worker WorkerNode) (*grpc.ClientConn, error) {
 	if ok {
 		return conn, nil
 	}
-	maxSize := 30 * 1024 * 1024
+	maxSize := 50 * 1024 * 1024
 	conn, err := grpc.Dial(worker.Endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(
 		grpc.MaxCallRecvMsgSize(maxSize),
 		grpc.MaxCallSendMsgSize(maxSize),
