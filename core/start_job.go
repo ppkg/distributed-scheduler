@@ -126,7 +126,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 
 			// 如果在推送出错前已经存在报错则不更改job状态及message信息
 			if enum.JobStatus(job.Job.Status) != enum.FinishJobStatus {
-				glog.Errorf("ApplicationContext/StartJob 推送job回调通知异常,id:%d,err:%+v", job.Job.Id, err)
+				glog.Errorf("ApplicationContext/StartJob %v,id:%d", err, job.Job.Id)
 				return
 			}
 
@@ -199,7 +199,7 @@ func (s *ApplicationContext) filterPendingTask(ctx context.Context, job *dto.Job
 }
 
 // 任务执行完回调通知
-func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo, task *model.Task) func(err error) {
+func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo, task *model.Task) func(error) {
 	return func(err error) {
 		defer func() {
 			// 保存任务状态
@@ -229,6 +229,7 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 				job.Job.Status = int32(enum.PushTaskExceptionJobStatus)
 				util.CancelNotify(ctx, job, errMsg)
 			}
+			return
 		}
 
 		// 判断任务是否执行异常，异常则通知其他task停止执行

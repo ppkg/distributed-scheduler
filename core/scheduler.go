@@ -239,6 +239,11 @@ func (s *scheduleEngine) processTask(worker WorkerNode, task *model.Task) error 
 		}
 		excludeWorkers = s.appendExcludeWorker(excludeWorkers, myWorker)
 		glog.Errorf("ScheduleEngine/processTask 第%d次推送任务异常:%+v,worker:%s,taskId:%d", i+1, err, kit.JsonEncode(myWorker), task.Id)
+
+		// 如果是最后一次重试则不需要再去拉最新worker
+		if i == tryCount-1 {
+			continue
+		}
 		if s.isGrpcUnavailable(err) {
 			s.pullWorkerFn()
 			workers, err = s.predicateWorker(plugin)
@@ -577,7 +582,7 @@ func (s *scheduleEngine) DispatchJobNotify(job *dto.JobInfo, callback func(job *
 			}
 			excludeWorkers = s.appendExcludeWorker(excludeWorkers, myWorker)
 			glog.Errorf("ScheduleEngine/DispatchJobNotify 第%d次推送job回调通知异常:%+v,worker:%s,jobId:%d", i+1, err, kit.JsonEncode(myWorker), job.Job.Id)
-			err = fmt.Errorf("重试推送3次job回调通知异常:%+v,最后一次推送worker(%s)", err, myWorker.NodeId)
+			err = fmt.Errorf("重试推送%d次job回调通知异常:%+v,最后一次推送worker:%s", tryCount, err, myWorker.NodeId)
 		}
 	}
 	s.dispatchQueue <- fn
