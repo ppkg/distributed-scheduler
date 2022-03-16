@@ -12,6 +12,7 @@ import (
 	"github.com/ppkg/distributed-scheduler/enum"
 	"github.com/ppkg/distributed-scheduler/model"
 	"github.com/ppkg/distributed-scheduler/util"
+	"gorm.io/gorm"
 
 	"github.com/maybgit/glog"
 	"github.com/ppkg/kit"
@@ -283,10 +284,12 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 		// 创建新task并放入调度器执行
 		newTasks := s.createNewTasks(ctx, job, task, strings.Split(job.Job.PluginSet, ",")[pos+1])
 		if newTasks == nil {
+			glog.Infof("ApplicationContext/taskCallback jobId:%d,currentTask:%s 没有创建任何task", job.Job.Id, kit.JsonEncode(task))
 			return
 		}
 		job.TaskList.Append(newTasks...)
 		// 调度新的task
+		glog.Infof("ApplicationContext/taskCallback jobId:%d,currentTask:%s,newTask:%s", job.Job.Id, kit.JsonEncode(task), kit.JsonEncode(newTasks))
 		s.Scheduler.DispatchTask(job, s.buildTasks(ctx, job, newTasks)...)
 	}
 }
@@ -343,12 +346,17 @@ func (s *ApplicationContext) createNewTasks(ctx context.Context, job *dto.JobInf
 			SubPlugin: item,
 		})
 	}
+
 	// 持久化新task任务
-	if len(list) == 1 {
-		err = s.taskRepo.Save(s.Db, list[0])
-	} else {
-		err = s.taskRepo.BatchSave(s.Db, list)
-	}
+	err = s.Db.Transaction(func(tx *gorm.DB) error {
+		for _, v := range list {
+			err = s.taskRepo.Save(tx, v)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		errMsg := fmt.Sprintf("持久化新产生task异常,plugin:%s,新task:%s,%+v", plugin, kit.JsonEncode(list), err)
 		task.Status = int32(enum.ExceptionTaskStatus)
@@ -360,25 +368,6 @@ func (s *ApplicationContext) createNewTasks(ctx context.Context, job *dto.JobInf
 			job.Job.Status = int32(enum.SystemExceptionJobStatus)
 		}
 		return nil
-	}
-	if len(list) > 1 {
-		list, err = s.taskRepo.List(s.Db, map[string]interface{}{
-			"jobId":    job.Job.Id,
-			"sharding": task.Sharding,
-			"plugin":   plugin,
-		})
-		if err != nil {
-			errMsg := fmt.Sprintf("查询刚刚创建新task异常,plugin:%s,jobId:%d,err:%+v", plugin, job.Job.Id, err)
-			task.Status = int32(enum.ExceptionTaskStatus)
-			task.Message = errMsg
-			glog.Errorf("ApplicationContext/createNewTask %s", errMsg)
-
-			if s.isNeedCancelJob(job, task) {
-				util.CancelNotify(ctx, job, errMsg)
-				job.Job.Status = int32(enum.SystemExceptionJobStatus)
-			}
-			return nil
-		}
 	}
 	return list
 }

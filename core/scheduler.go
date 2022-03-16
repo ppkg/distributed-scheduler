@@ -439,11 +439,11 @@ func (s *scheduleEngine) DispatchTask(job *dto.JobInfo, tasks ...InputTask) {
 			plugin = item.Task.SubPlugin
 		}
 		limitQueue, ok := s.limitRateQueueMap[s.limitRateIndexer[plugin]]
-		if !ok {
-			s.dispatchQueue <- s.buildTaskFunc(job, item)
+		if ok {
+			limitQueue <- s.buildLimitRateTaskFunc(job, item)
 			continue
 		}
-		limitQueue <- s.buildLimitRateTaskFunc(job, item)
+		s.dispatchQueue <- s.buildTaskFunc(job, item)
 	}
 }
 
