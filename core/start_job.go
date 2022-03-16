@@ -35,7 +35,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	}()
 
 	// job运行超时处理
-	timeout := time.AfterFunc(3*time.Hour, func() {
+	timeout := time.AfterFunc(24*time.Hour, func() {
 		errMsg := fmt.Sprintf("job(%d,%s)处理超时终止运行,task数量:%d", jobInfo.Job.Id, jobInfo.Job.Name, jobInfo.Job.Size)
 		util.CancelNotify(ctx, jobInfo, errMsg)
 		jobInfo.Job.Status = int32(enum.RunningTimeoutJobStatus)
@@ -284,12 +284,10 @@ func (s *ApplicationContext) taskCallback(ctx context.Context, job *dto.JobInfo,
 		// 创建新task并放入调度器执行
 		newTasks := s.createNewTasks(ctx, job, task, strings.Split(job.Job.PluginSet, ",")[pos+1])
 		if newTasks == nil {
-			glog.Infof("ApplicationContext/taskCallback jobId:%d,currentTask:%s 没有创建任何task", job.Job.Id, kit.JsonEncode(task))
 			return
 		}
 		job.TaskList.Append(newTasks...)
 		// 调度新的task
-		glog.Infof("ApplicationContext/taskCallback jobId:%d,currentTask:%s,newTask:%s", job.Job.Id, kit.JsonEncode(task), kit.JsonEncode(newTasks))
 		s.Scheduler.DispatchTask(job, s.buildTasks(ctx, job, newTasks)...)
 	}
 }
