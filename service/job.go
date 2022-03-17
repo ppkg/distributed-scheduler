@@ -123,7 +123,7 @@ func (s *jobService) reloadJobInfo(jobInfo *dto.JobInfo) (*dto.JobInfo, error) {
 	}
 
 	jobInfo = dto.NewJobInfo(job)
-	taskList, err:=s.getExpectTaskList(jobInfo.Job.Id, job.Size)
+	taskList, err := s.getExpectTaskList(jobInfo.Job.Id, job.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -141,9 +141,6 @@ func (s *jobService) getExpectTaskList(jobId int64, size int32) ([]*model.Task, 
 	}
 	shardingMap := make(map[int32]struct{})
 	for _, v := range taskList {
-		if v.Sharding != 0 {
-			continue
-		}
 		shardingMap[v.Sharding] = struct{}{}
 	}
 	if size == int32(len(shardingMap)) {
