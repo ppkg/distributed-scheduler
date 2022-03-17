@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/ppkg/distributed-scheduler/core"
 	"github.com/ppkg/distributed-scheduler/dto"
@@ -113,7 +114,7 @@ func (s *jobService) SyncSubmit(stream job.JobService_SyncSubmitServer) error {
 
 // 重新加载job信息
 func (s *jobService) reloadJobInfo(jobInfo *dto.JobInfo) (*dto.JobInfo, error) {
-	job, err := s.jobRepo.FindById(s.appCtx.Db, jobInfo.Job.Id)
+	job, err := s.getJob(jobInfo.Job.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -122,14 +123,56 @@ func (s *jobService) reloadJobInfo(jobInfo *dto.JobInfo) (*dto.JobInfo, error) {
 	}
 
 	jobInfo = dto.NewJobInfo(job)
-	taskList, err := s.taskRepo.List(s.appCtx.Db, map[string]interface{}{
-		"jobId": jobInfo.Job.Id,
-	})
+	taskList, err:=s.getExpectTaskList(jobInfo.Job.Id, job.Size)
 	if err != nil {
 		return nil, err
 	}
 	jobInfo.TaskList.Append(taskList...)
 	return jobInfo, err
+}
+
+// 获取期望task列表
+func (s *jobService) getExpectTaskList(jobId int64, size int32) ([]*model.Task, error) {
+	taskList, err := s.taskRepo.List(s.appCtx.Db, map[string]interface{}{
+		"jobId": jobId,
+	})
+	if err != nil {
+		return nil, err
+	}
+	shardingMap := make(map[int32]struct{})
+	for _, v := range taskList {
+		if v.Sharding != 0 {
+			continue
+		}
+		shardingMap[v.Sharding] = struct{}{}
+	}
+	if size == int32(len(shardingMap)) {
+		return taskList, nil
+	}
+
+	// 当主从数据库存在延时时，需要睡眠一会再查询
+	glog.Warningf("jobService/getExpectTaskList 主从数据库存在延时 jobId:%d,size:%d", jobId, size)
+	time.Sleep(3 * time.Second)
+	return s.taskRepo.List(s.appCtx.Db, map[string]interface{}{
+		"jobId": jobId,
+	})
+}
+
+// 查询分布式job信息
+// 当主从同步数据延时严重导致最新数据查询不到
+func (s *jobService) getJob(id int64) (*model.Job, error) {
+	job, err := s.jobRepo.FindById(s.appCtx.Db, id)
+	if err != nil {
+		return nil, err
+	}
+	if job != nil {
+		return job, nil
+	}
+
+	// 当主从数据库存在延时时，需要睡眠一会再查询
+	glog.Warningf("jobService/getJob 主从数据库存在延时 %d", id)
+	time.Sleep(3 * time.Second)
+	return s.jobRepo.FindById(s.appCtx.Db, id)
 }
 
 // 持久化job信息
