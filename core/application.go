@@ -378,7 +378,7 @@ func (s *ApplicationContext) initRaft() error {
 		if item.Metadata["nodeId"] != s.conf.Raft.NodeId {
 			continue
 		}
-		item.Metadata["role"] = string(enum.LeaderRaftRole)
+		item.Metadata["role"] = string(enum.FollowerRaftRole)
 		s.updateNacosInstance(item)
 	}
 	return nil
