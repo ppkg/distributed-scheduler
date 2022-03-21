@@ -85,7 +85,7 @@ func (s *ApplicationContext) watchRaftLeader() {
 			// 30秒后再次确认自己身份
 			time.AfterFunc(30*time.Second, func() {
 				if !s.isLeader {
-					glog.Infof("ApplicationContext/watchRaftLeader 已经失去leader身份跳过确认leader身份")
+					glog.Infof("ApplicationContext/watchRaftLeader 当前raft节点(%s)已经失去leader身份跳过二次确认leader身份", s.conf.Raft.NodeId)
 					return
 				}
 				s.makeSureLeaderRole()
@@ -97,7 +97,7 @@ func (s *ApplicationContext) watchRaftLeader() {
 			time.AfterFunc(time.Minute, func() {
 				// 1分钟后检查是否满足重启job条件
 				if !s.isLeader {
-					glog.Infof("ApplicationContext/watchRaftLeader 已经失去leader身份跳过job重启")
+					glog.Infof("ApplicationContext/watchRaftLeader 当前raft节点(%s)已经失去leader身份跳过job重启", s.conf.Raft.NodeId)
 					return
 				}
 				s.restartUndoneAsyncJob()

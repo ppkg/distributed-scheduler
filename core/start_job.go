@@ -62,7 +62,7 @@ func (s *ApplicationContext) StartJob(jobInfo *dto.JobInfo) error {
 	if s.Scheduler.IsEmptyWorker() {
 		jobInfo.Job.Status = int32(enum.SystemExceptionJobStatus)
 		jobInfo.Job.Message = fmt.Sprintf("系统没有worker节点提供给job(%d,%s)调度执行", jobInfo.Job.Id, jobInfo.Job.Name)
-		glog.Errorf("ApplicationContext/StartJob %s", jobInfo.Job.Message)
+		glog.Errorf("ApplicationContext/StartJob %s %s", s.conf.Raft.NodeId, jobInfo.Job.Message)
 		err = s.jobRepo.UpdateStatus(s.Db, jobInfo.Job)
 		if err != nil {
 			glog.Errorf("ApplicationContext/StartJob 更新job状态异常,id:%d,err:%+v", jobInfo.Job.Id, err)
