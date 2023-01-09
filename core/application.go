@@ -394,7 +394,7 @@ func (s *ApplicationContext) updateNacosInstance(instance nacosModel.Instance) {
 		Ip:          instance.Ip,
 		Port:        instance.Port,
 		ClusterName: instance.ClusterName,
-		ServiceName: s.conf.Nacos.AppName,
+		ServiceName: s.conf.AppName,
 		GroupName:   s.conf.Nacos.ServiceGroup,
 		Ephemeral:   true,
 		Weight:      instance.Weight,
